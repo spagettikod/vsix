@@ -13,16 +13,18 @@ func init() {
 }
 
 var lsCmd = &cobra.Command{
-	Use:   "ls [unique package name]",
-	Short: "List extension versions",
-	Args:  cobra.MinimumNArgs(1),
+	Use:                   "ls PACKAGE",
+	Short:                 "List extension versions",
+	Example:               "vsix ls golang.Go",
+	Args:                  cobra.MinimumNArgs(1),
+	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		versions, err := vscode.ListVersions(vscode.Extension{UniqueID: args[0]})
+		ext, err := vscode.ListVersions(args[0])
 		if err != nil {
 			errLog.Fatalln(err)
 		}
-		for _, v := range versions {
-			fmt.Println(v)
+		for _, v := range ext.Versions {
+			fmt.Println(v.Version)
 		}
 	},
 }

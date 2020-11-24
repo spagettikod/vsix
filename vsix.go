@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -64,31 +62,31 @@ func isDir(p string) (bool, error) {
 	return info.IsDir(), nil
 }
 
-func parse(data []byte, destFiles map[string]bool) (extensions []vscode.Extension, err error) {
-	buf := bytes.NewBuffer(data)
-	scanner := bufio.NewScanner(buf)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.Index(line, "#") == 0 || len(line) == 0 {
-			continue
-		}
-		splitLine := strings.Split(line, " ")
-		ext := vscode.Extension{}
-		if len(splitLine) > 0 {
-			ext.UniqueID = splitLine[0]
-			if len(splitLine) == 2 {
-				ext.Version = splitLine[1]
-			}
-			if destFiles[ext.Filename()] {
-				infoLog.Printf("  extension '%s' already exist at destination, skipping", ext.String())
-			} else {
-				extensions = append(extensions, ext)
-				infoLog.Printf("  extension '%s' has not been downloaded", ext.String())
-			}
-		}
-	}
-	return extensions, scanner.Err()
-}
+// func parse(data []byte, destFiles map[string]bool) (extensions []vscode.Extension, err error) {
+// 	buf := bytes.NewBuffer(data)
+// 	scanner := bufio.NewScanner(buf)
+// 	for scanner.Scan() {
+// 		line := strings.TrimSpace(scanner.Text())
+// 		if strings.Index(line, "#") == 0 || len(line) == 0 {
+// 			continue
+// 		}
+// 		splitLine := strings.Split(line, " ")
+// 		ext := vscode.Extension{}
+// 		if len(splitLine) > 0 {
+// 			ext.UniqueID = splitLine[0]
+// 			if len(splitLine) == 2 {
+// 				ext.Version = splitLine[1]
+// 			}
+// 			if destFiles[ext.Filename()] {
+// 				infoLog.Printf("  extension '%s' already exist at destination, skipping", ext.String())
+// 			} else {
+// 				extensions = append(extensions, ext)
+// 				infoLog.Printf("  extension '%s' has not been downloaded", ext.String())
+// 			}
+// 		}
+// 	}
+// 	return extensions, scanner.Err()
+// }
 
 func findExtensions(p string, destFiles map[string]bool) (extensions []vscode.Extension, err error) {
 	dir, err := isDir(p)
@@ -107,18 +105,18 @@ func findExtensions(p string, destFiles map[string]bool) (extensions []vscode.Ex
 			}
 		}
 	} else {
-		infoLog.Printf("found file '%s'\n", p)
-		data, err := ioutil.ReadFile(p)
-		if err != nil {
-			return extensions, err
-		}
-		if isPlainText(data) {
-			exts, err := parse(data, destFiles)
-			if err != nil {
-				return extensions, err
-			}
-			extensions = append(extensions, exts...)
-		}
+		// infoLog.Printf("found file '%s'\n", p)
+		// data, err := ioutil.ReadFile(p)
+		// if err != nil {
+		// 	return extensions, err
+		// }
+		// if isPlainText(data) {
+		// 	exts, err := parse(data, destFiles)
+		// 	if err != nil {
+		// 		return extensions, err
+		// 	}
+		// 	extensions = append(extensions, exts...)
+		// }
 	}
 
 	return
