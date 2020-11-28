@@ -154,39 +154,4 @@ func fromPath(inPath, outPath string) {
 
 func main() {
 	cmd.Execute()
-	// flag.Parse()
-	// if verbose {
-	// 	infoLog = log.New(os.Stdout, "", 0)
-	// 	log.New(os.Stdout, "", 0)
-	// } else {
-	// 	infoLog = log.New(ioutil.Discard, "", 0)
-	// }
-	// uniqueID = flag.Arg(0)
-	// version = flag.Arg(1)
-	// if uniqueID == "" && inputPath == "" {
-	// 	printUsage("missing name")
-	// 	os.Exit(1)
-	// }
-	// if inputPath == "" && len(flag.Args()) == 0 {
-	// 	printUsage("missing input path")
-	// 	os.Exit(1)
-	// }
-	// if len(inputPath) > 0 && len(uniqueID) > 0 {
-	// 	printUsage("use either an input path or extension name")
-	// 	os.Exit(1)
-	// }
-
-	// if inputPath != "" {
-	// 	infoLog.Printf("searching path '%s' for extensions\n", inputPath)
-	// 	fromPath(inputPath, outputPath)
-	// } else {
-	// 	if version == "" {
-	// 		infoLog.Printf("downloading extension '%s'\n", uniqueID)
-	// 	} else {
-	// 		infoLog.Printf("downloading extension '%s', version '%s'\n", uniqueID, version)
-	// 	}
-	// 	if err := vscode.DownloadVSIX(vscode.Extension{UniqueID: uniqueID, Version: version}); err != nil {
-	// 		errLog.Fatal(err)
-	// 	}
-	// }
 }
