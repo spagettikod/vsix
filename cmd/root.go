@@ -12,10 +12,9 @@ import (
 
 var (
 	rootCmd = &cobra.Command{
-		Use:     "vsix",
-		Short:   "Visual Studio Code Extension downloader.",
-		Long:    ``,
-		Version: "1.0.0",
+		Use:   "vsix",
+		Short: "Command line interface tool to Visual Studio Code Extension Marketplace.",
+		Long:  ``,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if verbose {
 				verboseLog.SetOutput(os.Stdout)
@@ -37,7 +36,8 @@ func init() {
 }
 
 // Execute TODO
-func Execute() {
+func Execute(version string) {
+	rootCmd.Version = version
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
