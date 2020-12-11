@@ -1,4 +1,4 @@
-VERSION=1.0.0
+VERSION=0.9.0
 OUTPUT=_pkg
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup
 
