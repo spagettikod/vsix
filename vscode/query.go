@@ -62,6 +62,6 @@ func latestQueryJSON(uniqueID string) string {
 	return fmt.Sprintf(latestVersionQueryTemplate, uniqueID)
 }
 
-func listVersionsJSON(uniqueID string) string {
+func listVersionsQueryJSON(uniqueID string) string {
 	return fmt.Sprintf(listVersionsQueryTemplate, uniqueID)
 }

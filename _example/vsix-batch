@@ -1,0 +1,11 @@
+# This is a comment
+golang.Go 0.17.1
+
+# These two lines will not be found and will produce output to stdErr.
+golang.Go 120.0
+sdfqwerqwedfaw
+
+Text with more than two words will be skipped by the parser, but us a # anyway to indicate a comment.
+
+golang.Go
+vscjava.vscode-java-pack

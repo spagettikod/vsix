@@ -6,20 +6,23 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 )
 
 const (
 	assetTypeVSIXPackage = "Microsoft.VisualStudio.Services.VSIXPackage"
+	propKeyExtensionPack = "Microsoft.VisualStudio.Code.ExtensionPack"
+	debugEnvVar          = "VSIX_DEBUG"
 )
 
-// ParseExtension TODO
-// func ParseExtension(s string) (id string, version string) {
-// 	id = s[:strings.LastIndex(s, "-")]
-// 	version = s[strings.LastIndex(s, "-"):]
-// 	ext := Extension{UniqueID: id, Version: version}
-// 	return
-// }
+var (
+	// ErrExtensionNotFound TODO
+	ErrExtensionNotFound = errors.New("extension could not be found at Marketplace")
+	// ErrExtensionHasNoVersions TODO
+	ErrExtensionHasNoVersions = errors.New("extension has no versions")
+)
 
 type extensionQueryResponse struct {
 	Results []struct {
@@ -30,32 +33,87 @@ type extensionQueryResponse struct {
 // Extension TODO
 type Extension struct {
 	Publisher struct {
-		ID   string `json:"publisherId"`
-		Name string `json:"publisherName"`
+		ID          string `json:"publisherId"`
+		Name        string `json:"publisherName"`
+		DisplayName string `json:"displayName"`
 	} `json:"publisher"`
-	Name     string `json:"extensionName"`
-	ID       string `json:"extensionID"`
-	Versions []struct {
+	Name             string    `json:"extensionName"`
+	ID               string    `json:"extensionID"`
+	DisplayName      string    `json:"displayName"`
+	ShortDescription string    `json:"shortDescription"`
+	ReleaseDate      time.Time `json:"releaseDate"`
+	LastUpdated      time.Time `json:"lastUpdated"`
+	Versions         []struct {
 		Version string `json:"version"`
 		Files   []struct {
 			AssetType string `json:"assetType"`
 			Source    string `json:"source"`
 		} `json:"files"`
+		Properties []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		} `json:"properties"`
 	} `json:"versions"`
 }
 
-// PackageURL TODO
-func (e Extension) PackageURL(version string) string {
+// NewExtension TODO
+func NewExtension(uniqueID string) (Extension, error) {
+	eqr, err := runQuery(latestQueryJSON(uniqueID))
+	if err != nil {
+		return Extension{}, err
+	}
+	uuid := eqr.Results[0].Extensions[0].ID
+	eqr, err = runQuery(listVersionsQueryJSON(uuid))
+	if err != nil {
+		return Extension{}, err
+	}
+	return eqr.Results[0].Extensions[0], err
+}
+
+// Download fetches the extensions with the given version from the Marketplace and saves it to outputPath.
+func (e Extension) Download(version, outputPath string) error {
+	url := ""
 	for _, v := range e.Versions {
-		if v.Version == version {
+		if version == v.Version {
 			for _, f := range v.Files {
 				if f.AssetType == assetTypeVSIXPackage {
-					return f.Source
+					url = f.Source
+					break
 				}
 			}
 		}
 	}
-	return ""
+	if url == "" {
+		return fmt.Errorf("version %s could not be found", version)
+	}
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(outputPath+"/"+e.Filename(version), b, os.ModePerm)
+}
+
+// IsExtensionPack TODO
+func (e Extension) IsExtensionPack() bool {
+	return len(e.ExtensionPack()) > 0
+}
+
+// ExtensionPack TODO
+func (e Extension) ExtensionPack() []string {
+	pack := []string{}
+	for _, p := range e.Versions[0].Properties {
+		if p.Key == propKeyExtensionPack {
+			if len(p.Value) > 0 {
+				pack = strings.Split(p.Value, ",")
+			}
+			break
+		}
+	}
+	return pack
 }
 
 // Filename TODO
@@ -63,7 +121,32 @@ func (e Extension) Filename(version string) string {
 	return fmt.Sprintf("%s.%s-%s.vsix", e.Publisher.Name, e.Name, version)
 }
 
+// FileExists TODO
+func (e Extension) FileExists(version, outputPath string) (bool, error) {
+	_, err := os.Stat(outputPath + "/" + e.Filename(version))
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// HasVersion TODO
+func (e Extension) HasVersion(version string) bool {
+	for _, v := range e.Versions {
+		if v.Version == version {
+			return true
+		}
+	}
+	return false
+}
+
 func runQuery(q string) (extensionQueryResponse, error) {
+	if _, debug := os.LookupEnv(debugEnvVar); debug {
+		ioutil.WriteFile("query.json", []byte(q), 0644)
+	}
 	eqr := extensionQueryResponse{}
 	req, err := http.NewRequest(http.MethodPost, "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery", strings.NewReader(q))
 	if err != nil {
@@ -83,65 +166,23 @@ func runQuery(q string) (extensionQueryResponse, error) {
 	if err != nil {
 		return eqr, err
 	}
+	if _, debug := os.LookupEnv(debugEnvVar); debug {
+		ioutil.WriteFile("response.json", b, 0644)
+	}
 	err = json.Unmarshal(b, &eqr)
 	if err != nil {
 		return eqr, err
 	}
 	if len(eqr.Results[0].Extensions) == 0 {
-		return eqr, errors.New("extension could not be found")
+		return eqr, ErrExtensionNotFound
 	}
 	if len(eqr.Results[0].Extensions[0].Versions) == 0 {
-		return eqr, fmt.Errorf("extension has no versions")
+		return eqr, ErrExtensionHasNoVersions
 	}
 	return eqr, err
 }
 
-// DownloadVSIX TODO
-func DownloadVSIX(id, version string) error {
-	// eqr, err := runQuery(latestQueryJSON(id))
-	// if err != nil {
-	// 	return err
-	// }
-	// for _, ef := range eqr.Results[0].Extensions[0].Versions[0].Files {
-	// 	if version != "" && version != eqr.Results[0].Extensions[0].Versions[0].Version {
-	// 		return fmt.Errorf("version '%s' for extension '%s' was no found", version, ext.UniqueID)
-	// 	}
-	// }
-	// resp, err := http.Get(ext.url)
-	// if err != nil {
-	// 	return err
-	// }
-	// b, err := ioutil.ReadAll(resp.Body)
-	// if err != nil {
-	// 	return err
-	// }
-	// err = ioutil.WriteFile(ext.Filename(), b, os.ModePerm)
-	// return err
-	return nil
-}
-
-// ListVersions TODO
-func ListVersions(id string) (Extension, error) {
-	ext := Extension{}
-	eqr, err := runQuery(latestQueryJSON(id))
-	if err != nil {
-		return ext, err
-	}
-	eqr, err = runQuery(listVersionsJSON(eqr.Results[0].Extensions[0].ID))
-	if err != nil {
-		return ext, err
-	}
-	ext = eqr.Results[0].Extensions[0]
-	return ext, nil
-}
-
-// Latest TODO
-func Latest(id string) (Extension, error) {
-	ext := Extension{}
-	eqr, err := runQuery(latestQueryJSON(id))
-	if err != nil {
-		return ext, err
-	}
-	ext = eqr.Results[0].Extensions[0]
-	return ext, nil
+// LatestVersion returns the latest version number for the extension with the given unique ID.
+func (e Extension) LatestVersion() string {
+	return e.Versions[0].Version
 }
