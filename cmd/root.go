@@ -13,8 +13,7 @@ import (
 var (
 	rootCmd = &cobra.Command{
 		Use:   "vsix",
-		Short: "Command line interface tool to Visual Studio Code Extension Marketplace.",
-		Long:  ``,
+		Short: "Command line interface tool for Visual Studio Code Extension Marketplace.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if verbose {
 				verboseLog.SetOutput(os.Stdout)

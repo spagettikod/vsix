@@ -14,7 +14,7 @@ func init() {
 }
 
 var infoCmd = &cobra.Command{
-	Use:                   "info <package>",
+	Use:                   "info <identifier>",
 	Short:                 "Display package information",
 	Example:               "vsix info golang.Go",
 	Args:                  cobra.MinimumNArgs(1),

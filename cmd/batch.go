@@ -20,8 +20,26 @@ func init() {
 }
 
 var batchCmd = &cobra.Command{
-	Use:                   "batch <file|dir>",
-	Short:                 "Download multiple packages specified in the input file or files in a directory",
+	Use:   "batch <file|dir>",
+	Short: "Download multiple packages specified in a input file or files in a directory",
+	Long: `Batch will download all the extensions specified in a text file. If a directory is
+given as input all text files in that directory (and its sub directories) will be parsed
+in search of extensions to download.
+
+Input file example:
+  # This is a comment
+  # This will download the latest version 
+  golang.Go
+  # This will download version 0.17.0 of the golang extension
+  golang.Go 0.17.0
+	
+Extensions are downloaded to the current folder unless the output-flag is set.
+	
+The command will exit with a non zero value if one of the extensions can not be found
+or a given version does not exist. These errors will be logged to standard error
+output but the execution will not stop.`,
+	Example: `  vsix batch my_extensions.txt
+  vsix batch -o downloads my_extensions.txt`,
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -32,15 +50,20 @@ var batchCmd = &cobra.Command{
 		if len(extensions) == 0 {
 			errLog.Fatalf("no extensions found at path '%s'", args[0])
 		}
+		loggedErrors := 0
 		for _, pe := range extensions {
 			err := download(pe, out)
 			if err != nil {
 				if errors.Is(err, errVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
 					errLog.Printf("%s: %s\n", pe, err)
+					loggedErrors++
 				} else {
 					errLog.Fatalf("%s: %s", pe, err)
 				}
 			}
+		}
+		if loggedErrors > 0 {
+			os.Exit(1)
 		}
 	},
 }

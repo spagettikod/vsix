@@ -14,8 +14,23 @@ func init() {
 }
 
 var getCmd = &cobra.Command{
-	Use:                   "get [flags] <package> [version]",
-	Short:                 "Download package",
+	Use:   "get [flags] <identifier> [version]",
+	Short: "Download extension",
+	Long: `Get will download the extension from the Marketplace. Extension identifier
+can be found on the Visual Studio Code Marketplace web page for a given extension
+where it's called "Unique Identifier". If the extension is a "Extension Pack",
+which is a collection of extentions, all those extension will also be downloaded
+as well.
+
+If version is not specified the latest version will be downloaded. The extension is
+downloaded to the current directory unless the output-flag is set. Download is skipped
+if the extension already exists in the output directory.
+
+The command will exit with a non zero value if the extension can not be found or the
+given version does not exist.`,
+	Example: `  vsix get golang.Go
+  vsix get golang.Go 0.17.0
+  vsix get -o downloads golang.Go`,
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
