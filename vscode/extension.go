@@ -54,6 +54,18 @@ type Extension struct {
 			Value string `json:"value"`
 		} `json:"properties"`
 	} `json:"versions"`
+	Statistics []struct {
+		Name  string  `json:"statisticName"`
+		Value float32 `json:"value"`
+	} `json:"statistics"`
+}
+
+func Search(query string, limit int8, sortBy SortCritera) ([]Extension, error) {
+	eqr, err := runQuery(searchQueryJSON(query, limit, sortBy))
+	if err != nil {
+		return []Extension{}, err
+	}
+	return eqr.Results[0].Extensions, nil
 }
 
 // NewExtension TODO
@@ -141,6 +153,37 @@ func (e Extension) HasVersion(version string) bool {
 		}
 	}
 	return false
+}
+
+func (e Extension) UniqueID() string {
+	return e.Publisher.Name + "." + e.Name
+}
+
+func (e Extension) InstallCount() int {
+	for _, stat := range e.Statistics {
+		if stat.Name == "install" {
+			return int(stat.Value)
+		}
+	}
+	return -1
+}
+
+func (e Extension) AverageRating() float32 {
+	for _, stat := range e.Statistics {
+		if stat.Name == "averagerating" {
+			return stat.Value
+		}
+	}
+	return -1
+}
+
+func (e Extension) RatingCount() int {
+	for _, stat := range e.Statistics {
+		if stat.Name == "ratingcount" {
+			return int(stat.Value)
+		}
+	}
+	return -1
 }
 
 func runQuery(q string) (extensionQueryResponse, error) {

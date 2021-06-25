@@ -4,6 +4,13 @@ import (
 	"fmt"
 )
 
+type SortCritera int
+
+const (
+	SortByNone         SortCritera = 0
+	SortByInstallCount SortCritera = 4
+)
+
 var latestVersionQueryTemplate string = `{
     "filters": [
         {
@@ -22,8 +29,8 @@ var latestVersionQueryTemplate string = `{
                 }
             ],
             "pageNumber": 1,
-            "pageSize": 1,
-            "sortBy": 0,
+            "pageSize": %v,
+            "sortBy": %v,
             "sortOrder": 0
         }
     ],
@@ -58,10 +65,24 @@ var listVersionsQueryTemplate string = `{
     "flags": 51
 }`
 
+func ParseSortCritera(sortBy string) (SortCritera, error) {
+	switch sortBy {
+	case "install":
+		return SortByInstallCount, nil
+	case "none":
+		return SortByNone, nil
+	}
+	return SortByNone, fmt.Errorf("%s is not a valid sort critera", sortBy)
+}
+
 func latestQueryJSON(uniqueID string) string {
-	return fmt.Sprintf(latestVersionQueryTemplate, uniqueID)
+	return fmt.Sprintf(latestVersionQueryTemplate, uniqueID, 1, SortByNone)
 }
 
 func listVersionsQueryJSON(uniqueID string) string {
 	return fmt.Sprintf(listVersionsQueryTemplate, uniqueID)
+}
+
+func searchQueryJSON(query string, limit int8, sortBy SortCritera) string {
+	return fmt.Sprintf(latestVersionQueryTemplate, query, limit, sortBy)
 }
