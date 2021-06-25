@@ -24,12 +24,16 @@ var searchCmd = &cobra.Command{
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		verboseLog.Printf("%s: looking up extension at Marketplace", args[0])
+		q := args[0]
+		if len(q) < 3 {
+			errLog.Fatalln("query parameter must cotain atleast 3 characters")
+		}
+		verboseLog.Printf("%s: looking up extension at Marketplace", q)
 		sortCritera, err := vscode.ParseSortCritera(sortByFlag)
 		if err != nil {
 			errLog.Fatalln(err)
 		}
-		exts, err := vscode.Search(args[0], limit, sortCritera)
+		exts, err := vscode.Search(q, limit, sortCritera)
 		if err != nil {
 			errLog.Fatalln(err)
 		}
