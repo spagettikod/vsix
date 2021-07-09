@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"os"
+	"path"
 
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
@@ -10,6 +11,7 @@ import (
 
 func init() {
 	getCmd.Flags().StringVarP(&out, "output", "o", ".", "Output directory for downloaded files")
+	getCmd.Flags().BoolVarP(&forceget, "force", "f", false, "Output directory for downloaded files")
 	rootCmd.AddCommand(getCmd)
 }
 
@@ -76,15 +78,20 @@ func download(pe parsedExtension, outputPath string) error {
 		return errVersionNotFound
 	}
 	verboseLog.Printf("%s: found version %s", pe, pe.Version)
-	if exists, err := ext.FileExists(pe.Version, outputPath); exists || err != nil {
+	if exists, err := ext.FileExists(pe.Version, outputPath); !forceget && (exists || err != nil) {
 		if exists {
 			verboseLog.Printf("%s: skipping download, version already exist at output path\n", pe)
 			return nil
 		}
 		return err
 	}
-	verboseLog.Printf("%s: downloading to %s", pe, outputPath)
-	return ext.Download(pe.Version, outputPath)
+	verboseLog.Printf("%s: downloading to %s", pe, path.Join(outputPath, ext.VsixFilename(pe.Version)))
+	err = ext.Download(pe.Version, outputPath)
+	if err != nil {
+		return err
+	}
+	verboseLog.Printf("%s: saving metadata to %s", pe, path.Join(outputPath, ext.MetaFilename(pe.Version)))
+	return ext.SaveMetadata(pe.Version, outputPath)
 }
 
 func outputPathExists(path string) (bool, error) {

@@ -27,6 +27,7 @@ var (
 	out                   string // used by sub-commands
 	limit                 int8   // used by sub-commands
 	sortByFlag            string // used by sub-commands
+	forceget              bool   // used by sub-commands
 	errFileExists         error  = errors.New("extension has already been downloaded")
 	errVersionNotFound    error  = errors.New("could not find version at Marketplace")
 	errOutputPathNotFound error  = errors.New("output path does not exist")

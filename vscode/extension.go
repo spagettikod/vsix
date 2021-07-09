@@ -18,9 +18,7 @@ const (
 )
 
 var (
-	// ErrExtensionNotFound TODO
-	ErrExtensionNotFound = errors.New("extension could not be found at Marketplace")
-	// ErrExtensionHasNoVersions TODO
+	ErrExtensionNotFound      = errors.New("extension could not be found at Marketplace")
 	ErrExtensionHasNoVersions = errors.New("extension has no versions")
 )
 
@@ -30,7 +28,6 @@ type extensionQueryResponse struct {
 	} `json:"results"`
 }
 
-// Extension TODO
 type Extension struct {
 	Publisher struct {
 		ID          string `json:"publisherId"`
@@ -68,7 +65,6 @@ func Search(query string, limit int8, sortBy SortCritera) ([]Extension, error) {
 	return eqr.Results[0].Extensions, nil
 }
 
-// NewExtension TODO
 func NewExtension(uniqueID string) (Extension, error) {
 	eqr, err := runQuery(latestQueryJSON(uniqueID))
 	if err != nil {
@@ -106,15 +102,22 @@ func (e Extension) Download(version, outputPath string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(outputPath+"/"+e.Filename(version), b, os.ModePerm)
+	return ioutil.WriteFile(outputPath+"/"+e.VsixFilename(version), b, os.ModePerm)
 }
 
-// IsExtensionPack TODO
+func (e Extension) SaveMetadata(version, outputPath string) error {
+	newExt := e.KeepVersions(version)
+	j, err := json.Marshal(newExt)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(outputPath+"/"+e.MetaFilename(version), j, os.ModePerm)
+}
+
 func (e Extension) IsExtensionPack() bool {
 	return len(e.ExtensionPack()) > 0
 }
 
-// ExtensionPack TODO
 func (e Extension) ExtensionPack() []string {
 	pack := []string{}
 	for _, p := range e.Versions[0].Properties {
@@ -128,14 +131,16 @@ func (e Extension) ExtensionPack() []string {
 	return pack
 }
 
-// Filename TODO
-func (e Extension) Filename(version string) string {
+func (e Extension) VsixFilename(version string) string {
 	return fmt.Sprintf("%s.%s-%s.vsix", e.Publisher.Name, e.Name, version)
 }
 
-// FileExists TODO
+func (e Extension) MetaFilename(version string) string {
+	return fmt.Sprintf("%s.%s-%s.json", e.Publisher.Name, e.Name, version)
+}
+
 func (e Extension) FileExists(version, outputPath string) (bool, error) {
-	_, err := os.Stat(outputPath + "/" + e.Filename(version))
+	_, err := os.Stat(outputPath + "/" + e.VsixFilename(version))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
@@ -145,7 +150,6 @@ func (e Extension) FileExists(version, outputPath string) (bool, error) {
 	return true, nil
 }
 
-// HasVersion TODO
 func (e Extension) HasVersion(version string) bool {
 	for _, v := range e.Versions {
 		if v.Version == version {
@@ -184,6 +188,19 @@ func (e Extension) RatingCount() int {
 		}
 	}
 	return -1
+}
+
+func (e Extension) KeepVersions(versions ...string) Extension {
+	newExt := e
+	newExt.Versions = e.Versions[:0]
+	for _, v := range e.Versions {
+		for _, keep := range versions {
+			if v.Version == keep {
+				newExt.Versions = append(newExt.Versions, v)
+			}
+		}
+	}
+	return newExt
 }
 
 func runQuery(q string) (extensionQueryResponse, error) {
