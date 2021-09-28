@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	searchCmd.Flags().Int8VarP(&limit, "limit", "l", 20, "Limit number of results")
+	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Limit number of results")
 	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "Sort critera, valid values are: none, install")
 	rootCmd.AddCommand(searchCmd)
 }
@@ -26,16 +26,16 @@ var searchCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		q := args[0]
 		if len(q) < 3 {
-			errLog.Fatalln("query parameter must cotain atleast 3 characters")
+			ErrLog.Fatalln("query parameter must cotain atleast 3 characters")
 		}
-		verboseLog.Printf("%s: looking up extension at Marketplace", q)
-		sortCritera, err := vscode.ParseSortCritera(sortByFlag)
+		VerboseLog.Printf("%s: looking up extension at Marketplace", q)
+		sortCritera, err := parseSortCriteria(sortByFlag)
 		if err != nil {
-			errLog.Fatalln(err)
+			ErrLog.Fatalln(err)
 		}
 		exts, err := vscode.Search(q, limit, sortCritera)
 		if err != nil {
-			errLog.Fatalln(err)
+			ErrLog.Fatalln(err)
 		}
 		data := [][]string{}
 		for _, ext := range exts {
@@ -75,4 +75,14 @@ var searchCmd = &cobra.Command{
 		table.AppendBulk(data) // Add Bulk Data
 		table.Render()
 	},
+}
+
+func parseSortCriteria(sortBy string) (vscode.SortCriteria, error) {
+	switch sortBy {
+	case "install":
+		return vscode.ByInstallCount, nil
+	case "none":
+		return vscode.ByNone, nil
+	}
+	return vscode.ByNone, fmt.Errorf("%s is not a valid sort critera", sortBy)
 }

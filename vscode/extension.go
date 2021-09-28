@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
 
 const (
-	assetTypeVSIXPackage = "Microsoft.VisualStudio.Services.VSIXPackage"
 	propKeyExtensionPack = "Microsoft.VisualStudio.Code.ExtensionPack"
 	debugEnvVar          = "VSIX_DEBUG"
 )
@@ -40,24 +41,65 @@ type Extension struct {
 	ShortDescription string    `json:"shortDescription"`
 	ReleaseDate      time.Time `json:"releaseDate"`
 	LastUpdated      time.Time `json:"lastUpdated"`
-	Versions         []struct {
-		Version string `json:"version"`
-		Files   []struct {
-			AssetType string `json:"assetType"`
-			Source    string `json:"source"`
-		} `json:"files"`
-		Properties []struct {
-			Key   string `json:"key"`
-			Value string `json:"value"`
-		} `json:"properties"`
-	} `json:"versions"`
-	Statistics []struct {
+	Versions         []Version `json:"versions,omitempty"`
+	Statistics       []struct {
 		Name  string  `json:"statisticName"`
 		Value float32 `json:"value"`
 	} `json:"statistics"`
 }
 
-func Search(query string, limit int8, sortBy SortCritera) ([]Extension, error) {
+func BuildDatabase(root string) ([]Extension, error) {
+	root = path.Join(root, "extensions")
+	rootFS := os.DirFS(root)
+	versions := []Version{}
+	exts := []Extension{}
+	ver := Version{}
+	extName := ""
+	err := fs.WalkDir(rootFS, ".", func(p string, d fs.DirEntry, err error) error {
+		fmt.Println(p)
+		// example: p == golang/go/metadata.json
+		if p == path.Join(extName, "metadata.json") {
+			b, err := ioutil.ReadFile(path.Join(root, p))
+			if err != nil {
+				return err
+			}
+			ext := Extension{}
+			err = json.Unmarshal(b, &ext)
+			if err != nil {
+				return err
+			}
+			versions = append(versions, ver)
+			ext.Versions = versions
+			exts = append(exts, ext)
+			return nil
+		}
+		// example: p == golang/go
+		if strings.Count(p, "/") == 1 {
+			extName = p
+			versions = versions[:0]
+			return nil
+		}
+		// example: p == golang/go/0.26.0
+		if strings.Count(p, "/") == 2 {
+			if ver.Version != "" {
+				versions = append(versions, ver)
+			}
+			ver = Version{Version: strings.Split(p, "/")[2]}
+			return nil
+		}
+		// example: p == golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest
+		if strings.Count(p, "/") == 4 {
+			asset := Asset{Source: p}
+			asset.Type = AssetTypeKey(strings.Split(p, "/")[4])
+			ver.Files = append(ver.Files, asset)
+			return nil
+		}
+		return nil
+	})
+	return exts, err
+}
+
+func Search(query string, limit int, sortBy SortCriteria) ([]Extension, error) {
 	eqr, err := runQuery(searchQueryJSON(query, limit, sortBy))
 	if err != nil {
 		return []Extension{}, err
@@ -78,40 +120,49 @@ func NewExtension(uniqueID string) (Extension, error) {
 	return eqr.Results[0].Extensions[0], err
 }
 
-// Download fetches the extensions with the given version from the Marketplace and saves it to outputPath.
-func (e Extension) Download(version, outputPath string) error {
-	url := ""
+func (e Extension) Assets(version string) ([]Asset, bool) {
 	for _, v := range e.Versions {
 		if version == v.Version {
-			for _, f := range v.Files {
-				if f.AssetType == assetTypeVSIXPackage {
-					url = f.Source
-					break
-				}
+			return v.Files, true
+		}
+	}
+	return []Asset{}, false
+}
+
+func (e Extension) Asset(version string, assetType AssetTypeKey) (Asset, bool) {
+	if assets, exists := e.Assets(version); exists {
+		for _, a := range assets {
+			if a.Is(assetType) {
+				return a, true
 			}
 		}
 	}
-	if url == "" {
-		return fmt.Errorf("version %s could not be found", version)
-	}
-	resp, err := http.Get(url)
-	if err != nil {
-		return err
-	}
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(outputPath+"/"+e.VsixFilename(version), b, os.ModePerm)
+	return Asset{}, false
 }
 
-func (e Extension) SaveMetadata(version, outputPath string) error {
-	newExt := e.KeepVersions(version)
+// Dir return the path of this extension. The path does not include the output directory, only the path within the output directory.
+func (e Extension) Dir() string {
+	return path.Join("extensions", strings.ToLower(e.Publisher.Name), strings.ToLower(e.Name))
+}
+
+// MetaPath return the path to the metadata.json file for this extension. The path does not include the output directory, only the path within the output directory.
+func (e Extension) MetaPath() string {
+	return path.Join(e.Dir(), "metadata.json")
+}
+
+func (e Extension) SaveMetadata(outputPath string) error {
+	// re-run query to populate statistics, list versions query does not populate statistics, is there another way?
+	eqr, err := runQuery(latestQueryJSON(e.UniqueID()))
+	if err != nil {
+		return err
+	}
+	newExt := eqr.Results[0].Extensions[0]
+	newExt.Versions = []Version{}
 	j, err := json.Marshal(newExt)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(outputPath+"/"+e.MetaFilename(version), j, os.ModePerm)
+	return ioutil.WriteFile(path.Join(outputPath, e.MetaPath()), j, os.ModePerm)
 }
 
 func (e Extension) IsExtensionPack() bool {
@@ -131,16 +182,8 @@ func (e Extension) ExtensionPack() []string {
 	return pack
 }
 
-func (e Extension) VsixFilename(version string) string {
-	return fmt.Sprintf("%s.%s-%s.vsix", e.Publisher.Name, e.Name, version)
-}
-
-func (e Extension) MetaFilename(version string) string {
-	return fmt.Sprintf("%s.%s-%s.json", e.Publisher.Name, e.Name, version)
-}
-
-func (e Extension) FileExists(version, outputPath string) (bool, error) {
-	_, err := os.Stat(outputPath + "/" + e.VsixFilename(version))
+func (e Extension) VersionExists(version, outputPath string) (bool, error) {
+	_, err := os.Stat(path.Join(outputPath, e.Dir(), version))
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}

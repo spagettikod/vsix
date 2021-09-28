@@ -23,3 +23,7 @@ func TestTemp(t *testing.T) {
 	}
 	os.Rename(name, path.Join("temp", path.Base(name)[:strings.LastIndex(path.Base(name), ".part")]+".log"))
 }
+
+func TestBitmask(t *testing.T) {
+
+}

@@ -14,7 +14,8 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 }
 
-func handle(w http.ResponseWriter, r *http.Request) {
+func logRequest(r *http.Request) {
+	log.Println("--------------------------------------------------------------")
 	log.Println(r.Method)
 	for k, v := range r.Header {
 		log.Printf("%s: %v\n", k, v)
@@ -28,6 +29,10 @@ func handle(w http.ResponseWriter, r *http.Request) {
 		json.Indent(&out, b, "", "  ")
 		log.Println(out.String())
 	}
+}
+
+func handle(w http.ResponseWriter, r *http.Request) {
+	logRequest(r)
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	w.Header().Add("Access-Control-Allow-Headers", "*")
 	w.Header().Add("Access-Control-Allow-Methods", "*")
@@ -35,13 +40,13 @@ func handle(w http.ResponseWriter, r *http.Request) {
 }
 
 var serveCmd = &cobra.Command{
-	Use:     "serve",
+	Use:     "serve <root>",
 	Short:   "Serve downloaded extensions",
 	Example: "vsix serve",
 	// Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		http.HandleFunc("/extensionquery", handle)
+		http.HandleFunc("/_apis/public/gallery/extensionquery", handle)
 		if err := http.ListenAndServeTLS(":8080", "/home/roland/lego/certificates/lisa.spagettikod.se.crt", "/home/roland/lego/certificates/lisa.spagettikod.se.key", nil); err != nil {
 			log.Fatalln(err)
 		}

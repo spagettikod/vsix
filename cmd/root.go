@@ -16,21 +16,22 @@ var (
 		Short: "Command line interface tool for Visual Studio Code Extension Marketplace.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if verbose {
-				verboseLog.SetOutput(os.Stdout)
+				VerboseLog.SetOutput(os.Stdout)
 			}
 		},
 	}
-	errLog                = log.New(os.Stderr, "", 0)
-	infLog                = log.New(os.Stdout, "", 0)
-	verboseLog            = log.New(ioutil.Discard, "", 0)
-	verbose               bool
-	out                   string // used by sub-commands
-	limit                 int8   // used by sub-commands
-	sortByFlag            string // used by sub-commands
-	forceget              bool   // used by sub-commands
-	errFileExists         error  = errors.New("extension has already been downloaded")
-	errVersionNotFound    error  = errors.New("could not find version at Marketplace")
-	errOutputPathNotFound error  = errors.New("output path does not exist")
+	verbose            bool
+	out                string // used by sub-commands
+	limit              int    // used by sub-commands
+	sortByFlag         string // used by sub-commands
+	forceget           bool   // used by sub-commands
+	ErrFileExists      error  = errors.New("extension has already been downloaded")
+	ErrVersionNotFound error  = errors.New("could not find version at Marketplace")
+	ErrOutDirNotFound  error  = errors.New("output dir does not exist")
+
+	ErrLog     = log.New(os.Stderr, "", 0)
+	InfLog     = log.New(os.Stdout, "", 0)
+	VerboseLog = log.New(ioutil.Discard, "", 0)
 )
 
 func init() {

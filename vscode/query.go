@@ -1,88 +1,131 @@
 package vscode
 
 import (
-	"fmt"
+	"encoding/json"
 )
 
-type SortCritera int
+type QueryResults struct {
+	Results []struct {
+		Extensions     []Extension `json:"extensions"`
+		ResultMetadata []struct {
+			MetadataType  string `json:"metadataType"`
+			MetadataItems []struct {
+				Name  string `json:"name`
+				Count int    `json:"count`
+			} `json:"metadataItems"`
+		} `json:"resultMetadata"`
+	} `json:"results"`
+}
+
+type Query struct {
+	Filters    []Filter      `json:"filters"`
+	AssetTypes []interface{} `json:"assetTypes"`
+	Flags      QueryFlag     `json:"flags"`
+}
+
+type Filter struct {
+	Criteria   []Criteria   `json:"criteria"`
+	PageNumber int          `json:"pageNumber"`
+	PageSize   int          `json:"pageSize"`
+	SortBy     SortCriteria `json:"sortBy"`
+	SortOrder  int          `json:"sortOrder"`
+}
+
+type Criteria struct {
+	FilterType FilterType `json:"filterType"`
+	Value      string     `json:"value"`
+}
+
+type SortCriteria int
+type QueryFlag int
+type FilterType int
 
 const (
-	SortByNone         SortCritera = 0
-	SortByInstallCount SortCritera = 4
+	ByNone          SortCriteria = 0
+	ByName          SortCriteria = 2
+	ByPublishedDate SortCriteria = 5
+	ByInstallCount  SortCriteria = 4
+	ByRating        SortCriteria = 12
+
+	FlagAllVersions   QueryFlag = 51
+	FlagLatestVersion QueryFlag = 950
+
+	FilterTypeTag           FilterType = 1
+	FilterTypeExtensionID   FilterType = 4
+	FilterTypeCatergory     FilterType = 5
+	FilterTypeExtensionName FilterType = 7
+	FilterTypeTarget        FilterType = 8
+	FilterTypeFeatured      FilterType = 9
+	FilterTypeSearchText    FilterType = 10
 )
 
-var latestVersionQueryTemplate string = `{
-    "filters": [
-        {
-            "criteria": [
-                {
-                    "filterType": 8,
-                    "value": "Microsoft.VisualStudio.Code"
-                },
-                {
-                    "filterType": 10,
-                    "value": "%s"
-                },
-                {
-                    "filterType": 12,
-                    "value": "4096"
-                }
-            ],
-            "pageNumber": 1,
-            "pageSize": %v,
-            "sortBy": %v,
-            "sortOrder": 0
-        }
-    ],
-    "assetTypes": [],
-    "flags": 946
-}`
+var (
+	MSVSCodeCriteria    = Criteria{FilterType: 8, Value: "Microsoft.VisualStudio.Code"}
+	SomeUnknownCriteria = Criteria{FilterType: 12, Value: "4096"}
+)
 
-var listVersionsQueryTemplate string = `{
-    "filters": [
-        {
-            "criteria": [
-                {
-                    "filterType": 8,
-                    "value": "Microsoft.VisualStudio.Code"
-                },
-                {
-                    "filterType": 4,
-                    "value": "%s"
-                },
-                {
-                    "filterType": 12,
-                    "value": "4096"
-                }
-            ],
-            "pageNumber": 1,
-            "pageSize": 1,
-            "sortBy": 0,
-            "sortOrder": 0
-        }
-    ],
-    "assetTypes": [],
-    "flags": 51
-}`
+var latestVersionQueryTemplate2 = Filter{
+	Criteria: []Criteria{
+		MSVSCodeCriteria,
+		SomeUnknownCriteria,
+	},
+}
 
-func ParseSortCritera(sortBy string) (SortCritera, error) {
-	switch sortBy {
-	case "install":
-		return SortByInstallCount, nil
-	case "none":
-		return SortByNone, nil
+func (q Query) AddCriteria(c Criteria) {
+	q.Filters[0].Criteria = append(
+		q.Filters[0].Criteria,
+		c,
+	)
+}
+
+func baseQuery() Query {
+	q := Query{}
+	f := Filter{
+		Criteria: []Criteria{
+			MSVSCodeCriteria,
+			SomeUnknownCriteria,
+		},
+		PageNumber: 1,
+		PageSize:   1,
+		SortBy:     ByNone,
+		SortOrder:  0,
 	}
-	return SortByNone, fmt.Errorf("%s is not a valid sort critera", sortBy)
+	q.Filters = append(q.Filters, f)
+	q.Flags = FlagLatestVersion
+	return q
 }
 
 func latestQueryJSON(uniqueID string) string {
-	return fmt.Sprintf(latestVersionQueryTemplate, uniqueID, 1, SortByNone)
+	q := baseQuery()
+	q.AddCriteria(Criteria{
+		FilterType: FilterTypeSearchText,
+		Value:      uniqueID,
+	})
+	q.Flags = 512
+	b, _ := json.Marshal(q)
+	return string(b)
 }
 
 func listVersionsQueryJSON(uniqueID string) string {
-	return fmt.Sprintf(listVersionsQueryTemplate, uniqueID)
+	q := baseQuery()
+	q.AddCriteria(Criteria{
+		FilterType: FilterTypeExtensionID,
+		Value:      uniqueID,
+	})
+	// q.Flags = 950
+	b, _ := json.Marshal(q)
+	return string(b)
 }
 
-func searchQueryJSON(query string, limit int8, sortBy SortCritera) string {
-	return fmt.Sprintf(latestVersionQueryTemplate, query, limit, sortBy)
+func searchQueryJSON(query string, limit int, sortBy SortCriteria) string {
+	q := baseQuery()
+	q.AddCriteria(Criteria{
+		FilterType: FilterTypeSearchText,
+		Value:      query,
+	})
+	q.Flags = FlagLatestVersion
+	q.Filters[0].SortBy = sortBy
+	q.Filters[0].PageSize = limit
+	b, _ := json.Marshal(q)
+	return string(b)
 }

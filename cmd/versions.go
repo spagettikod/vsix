@@ -17,13 +17,13 @@ var versionsCmd = &cobra.Command{
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		verboseLog.Printf("%s: looking up extension at Marketplace", args[0])
+		VerboseLog.Printf("%s: looking up extension at Marketplace", args[0])
 		ext, err := vscode.NewExtension(args[0])
 		if err != nil {
-			errLog.Fatalln(err)
+			ErrLog.Fatalln(err)
 		}
 		for _, v := range ext.Versions {
-			infLog.Println(v.Version)
+			InfLog.Println(v.Version)
 		}
 	},
 }
