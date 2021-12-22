@@ -11,26 +11,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	debugEnvVar = "VSIX_DEBUG"
-)
-
 var (
 	rootCmd = &cobra.Command{
 		Use:   "vsix",
 		Short: "Command line interface tool for Visual Studio Code Extension Marketplace.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+			if !jsonLog {
+				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+			}
 			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 			if verbose {
 				zerolog.SetGlobalLevel(zerolog.InfoLevel)
 			}
-			if _, debugEnabled := os.LookupEnv(debugEnvVar); debugEnabled {
+			if debug {
 				zerolog.SetGlobalLevel(zerolog.DebugLevel)
 			}
 		},
 	}
 	verbose            bool
+	debug              bool
+	jsonLog            bool
 	out                string // used by sub-commands
 	limit              int    // used by sub-commands
 	sortByFlag         string // used by sub-commands
@@ -43,7 +43,9 @@ var (
 )
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "1", false, "turn on debug logging")
+	rootCmd.PersistentFlags().BoolVarP(&jsonLog, "json", "j", false, "output verbose and debug logs as JSON")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "turn on verbose logging")
 }
 
 // Execute TODO

@@ -75,11 +75,10 @@ Set the URL to your server, for example https://vsix.example.com:8080, see Examp
 			os.Exit(1)
 		}
 		if db.Empty() {
-			fmt.Printf("could not find any extensions at %v, exiting\n", root)
-			os.Exit(1)
+			log.Info().Msgf("could not find any extensions at %v", root)
 		} else {
 			stats := db.Stats()
-			log.Info().Msgf("Serving %v versions of %v extensions...", stats.VersionCount, stats.ExtensionCount)
+			log.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
 		}
 
 		stack := alice.New(
@@ -102,8 +101,9 @@ Set the URL to your server, for example https://vsix.example.com:8080, see Examp
 		http.Handle(assetRoot, stack.Then(assetHandler(db)))
 		http.Handle(apiRoot, stack.Then(queryHandler(db)))
 
-		log.Info().Msgf("Extension API is served from: %s", server+apiRoot)
-		log.Info().Msgf("Assets are served from: %s", server+assetRoot)
+		log.Info().Msgf("Use this server in Visual Studio Code by setting \"serviceUrl\" in the file product.json to \"%s\"", server+apiRoot[:strings.LastIndex(apiRoot, "/")])
+		log.Debug().Msgf("assets are served from %s", server+assetRoot)
+
 		if err := http.ListenAndServeTLS(serveAddr, args[1], args[2], nil); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
