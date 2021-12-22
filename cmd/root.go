@@ -3,11 +3,16 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
+	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+)
+
+const (
+	debugEnvVar = "VSIX_DEBUG"
 )
 
 var (
@@ -15,8 +20,13 @@ var (
 		Use:   "vsix",
 		Short: "Command line interface tool for Visual Studio Code Extension Marketplace.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 			if verbose {
-				VerboseLog.SetOutput(os.Stdout)
+				zerolog.SetGlobalLevel(zerolog.InfoLevel)
+			}
+			if _, debugEnabled := os.LookupEnv(debugEnvVar); debugEnabled {
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
 			}
 		},
 	}
@@ -25,13 +35,11 @@ var (
 	limit              int    // used by sub-commands
 	sortByFlag         string // used by sub-commands
 	forceget           bool   // used by sub-commands
+	serveDBRoot        string // used by sub-commands
+	serveAddr          string // used by sub-commands
 	ErrFileExists      error  = errors.New("extension has already been downloaded")
 	ErrVersionNotFound error  = errors.New("could not find version at Marketplace")
 	ErrOutDirNotFound  error  = errors.New("output dir does not exist")
-
-	ErrLog     = log.New(os.Stderr, "", 0)
-	InfLog     = log.New(os.Stdout, "", 0)
-	VerboseLog = log.New(ioutil.Discard, "", 0)
 )
 
 func init() {

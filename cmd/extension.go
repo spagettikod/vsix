@@ -8,9 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 )
 
@@ -27,7 +27,7 @@ func NewFromFile(p string) ([]ExtensionRequest, error) {
 		return ers, err
 	}
 	if dir {
-		VerboseLog.Printf("found directory '%s'\n", p)
+		log.Info().Str("path", p).Msg("found directory")
 		fis, err := ioutil.ReadDir(p)
 		if err != nil {
 			return ers, err
@@ -54,19 +54,21 @@ func NewFromFile(p string) ([]ExtensionRequest, error) {
 func parseFile(p string) ([]ExtensionRequest, error) {
 	exts := []ExtensionRequest{}
 
-	VerboseLog.Printf("found file %s\n", p)
+	plog := log.With().Str("path", p).Logger()
+
+	plog.Info().Msg("found file")
 	data, err := ioutil.ReadFile(p)
 	if err != nil {
 		return exts, err
 	}
 	if isPlainText(data) {
-		VerboseLog.Printf("parsing file %s\n", p)
+		plog.Info().Msg("parsing file")
 		exts, err := parse(data)
 		if err != nil {
 			return exts, err
 		}
 	} else {
-		VerboseLog.Println("  skipping, not a text file")
+		plog.Info().Msg("skipping, not a text file")
 	}
 
 	return exts, nil
@@ -112,29 +114,30 @@ func parse(data []byte) (extensions []ExtensionRequest, err error) {
 			}
 			extensions = append(extensions, ext)
 			if ext.Version == "" {
-				VerboseLog.Printf("  parsed extension: %s\n", ext.UniqueID)
+				log.Info().Str("extension", ext.UniqueID).Msg("parsed")
 			} else {
-				VerboseLog.Printf("  parsed extension: %s, version %s\n", ext.UniqueID, ext.Version)
+				log.Info().Str("extension", ext.UniqueID).Str("version", ext.Version).Msg("parsed")
 			}
 		}
 	}
 	return extensions, scanner.Err()
 }
 
-func (pe ExtensionRequest) Download(outDir string) error {
-	if exists, err := outDirExists(outDir); !exists {
+func (pe ExtensionRequest) Download(root string) error {
+	if exists, err := outDirExists(root); !exists {
 		return err
 	}
-	VerboseLog.Printf("%s: searching for extension at Marketplace", pe)
+	elog := log.With().Str("extension", pe.UniqueID).Logger()
+	elog.Info().Msg("searching for extension at Marketplace")
 	ext, err := vscode.NewExtension(pe.UniqueID)
 	if err != nil {
 		return err
 	}
 	if ext.IsExtensionPack() {
-		VerboseLog.Printf("%s: is extension pack, getting pack contents", pe)
+		elog.Info().Msg("is extension pack, getting pack contents")
 		for _, pack := range ext.ExtensionPack() {
 			erPack := ExtensionRequest{UniqueID: pack}
-			err := erPack.Download(outDir)
+			err := erPack.Download(root)
 			if err != nil {
 				return err
 			}
@@ -143,26 +146,53 @@ func (pe ExtensionRequest) Download(outDir string) error {
 	if pe.Version == "" {
 		pe.Version = ext.LatestVersion()
 	}
-	if !ext.HasVersion(pe.Version) {
+	if _, found := ext.Version(pe.Version); !found {
 		return ErrVersionNotFound
 	}
-	VerboseLog.Printf("%s: found version %s", pe, pe.Version)
-	if exists, err := ext.VersionExists(pe.Version, outDir); !forceget && (exists || err != nil) {
+	elog.Info().Str("version", pe.Version).Msg("found version")
+	if exists, err := ext.VersionExists(pe.Version, root); !forceget && (exists || err != nil) {
 		if exists {
-			VerboseLog.Printf("%s: skipping download, version already exist at output path\n", pe)
+			elog.Info().Str("version", pe.Version).Msg("skipping download, version already exist at output path")
 			return nil
 		}
 		return err
 	}
+
+	// create version directory where files are saved
+	versionDir := ext.AbsVersionDir(root, pe.Version)
+	if err := os.MkdirAll(versionDir, os.ModePerm); err != nil {
+		return err
+	}
+
 	assets, _ := ext.Assets(pe.Version)
 	for _, asset := range assets {
-		VerboseLog.Printf("%s: downloading %s to %s", pe, asset.Source, asset.Abs(outDir))
-		if err := asset.Download(outDir); err != nil {
+		elog.Info().
+			Str("version", pe.Version).
+			Str("source", asset.Source).
+			Str("destination", versionDir).
+			Msg("downloading")
+		if err := asset.Download(versionDir); err != nil {
 			return err
 		}
 	}
-	VerboseLog.Printf("%s: saving metadata to %s", pe, path.Join(outDir, ext.MetaPath()))
-	return ext.SaveMetadata(outDir)
+
+	elog.Info().
+		Str("version", pe.Version).
+		Str("destination", ext.AbsVersionDir(root, pe.Version)).
+		Msg("saving version metadata")
+	version, found := ext.Version(pe.Version)
+	if !found {
+		return fmt.Errorf("error while saving version metadata %w", vscode.ErrVersionNotFound)
+	}
+	if err := version.SaveMetadata(ext.AbsVersionDir(root, pe.Version)); err != nil {
+		return err
+	}
+
+	elog.Info().
+		Str("version", pe.Version).
+		Str("destination", ext.AbsMetadataFile(root)).
+		Msg("saving extension metadata")
+	return ext.SaveMetadata(root)
 }
 
 func outDirExists(path string) (bool, error) {

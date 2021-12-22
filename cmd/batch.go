@@ -2,14 +2,16 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"os"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	batchCmd.Flags().StringVarP(&out, "output", "o", ".", "Output directory for downloaded files")
+	batchCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
 	rootCmd.AddCommand(batchCmd)
 }
 
@@ -39,20 +41,23 @@ output but the execution will not stop.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		extensions, err := NewFromFile(args[0])
 		if err != nil {
-			ErrLog.Fatal(err)
+			fmt.Println(err)
+			os.Exit(1)
 		}
 		if len(extensions) == 0 {
-			ErrLog.Fatalf("no extensions found at path '%s'", args[0])
+			fmt.Printf("no extensions found at path '%s'", args[0])
+			os.Exit(1)
 		}
 		loggedErrors := 0
 		for _, pe := range extensions {
 			err := pe.Download(out)
 			if err != nil {
 				if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
-					ErrLog.Printf("%s: %s\n", pe, err)
+					log.Error().Msgf("%s: %s\n", pe, err)
 					loggedErrors++
 				} else {
-					ErrLog.Fatalf("%s: %s", pe, err)
+					fmt.Printf("%s: %s\n", pe, err)
+					os.Exit(1)
 				}
 			}
 		}

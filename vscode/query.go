@@ -60,7 +60,7 @@ const (
 )
 
 var (
-	MSVSCodeCriteria    = Criteria{FilterType: 8, Value: "Microsoft.VisualStudio.Code"}
+	MSVSCodeCriteria    = Criteria{FilterType: FilterTypeTarget, Value: "Microsoft.VisualStudio.Code"}
 	SomeUnknownCriteria = Criteria{FilterType: 12, Value: "4096"}
 )
 
@@ -72,13 +72,28 @@ var latestVersionQueryTemplate2 = Filter{
 }
 
 func (q Query) AddCriteria(c Criteria) {
-	q.Filters[0].Criteria = append(
-		q.Filters[0].Criteria,
-		c,
-	)
+	nonDefaultCritera := q.Filters[0].Criteria[1 : len(q.Filters[0].Criteria)-1]
+	nonDefaultCritera = append(nonDefaultCritera, c)
+	q.Filters[0].Criteria = []Criteria{}
+	q.Filters[0].Criteria = append(q.Filters[0].Criteria, MSVSCodeCriteria)
+	q.Filters[0].Criteria = append(q.Filters[0].Criteria, nonDefaultCritera...)
+	q.Filters[0].Criteria = append(q.Filters[0].Criteria, SomeUnknownCriteria)
 }
 
-func baseQuery() Query {
+// CriteriaValues returns an array of values among all critera in the query matching the supplied filterType.
+func (q Query) CriteriaValues(filterType FilterType) []string {
+	values := []string{}
+	for _, f := range q.Filters {
+		for _, c := range f.Criteria {
+			if c.FilterType == filterType {
+				values = append(values, c.Value)
+			}
+		}
+	}
+	return values
+}
+
+func NewQuery() Query {
 	q := Query{}
 	f := Filter{
 		Criteria: []Criteria{
@@ -96,29 +111,29 @@ func baseQuery() Query {
 }
 
 func latestQueryJSON(uniqueID string) string {
-	q := baseQuery()
+	q := NewQuery()
 	q.AddCriteria(Criteria{
-		FilterType: FilterTypeSearchText,
+		FilterType: FilterTypeExtensionName,
 		Value:      uniqueID,
 	})
-	q.Flags = 512
+	q.Flags = FlagLatestVersion
 	b, _ := json.Marshal(q)
 	return string(b)
 }
 
 func listVersionsQueryJSON(uniqueID string) string {
-	q := baseQuery()
+	q := NewQuery()
 	q.AddCriteria(Criteria{
 		FilterType: FilterTypeExtensionID,
 		Value:      uniqueID,
 	})
-	// q.Flags = 950
+	q.Flags = FlagAllVersions
 	b, _ := json.Marshal(q)
 	return string(b)
 }
 
 func searchQueryJSON(query string, limit int, sortBy SortCriteria) string {
-	q := baseQuery()
+	q := NewQuery()
 	q.AddCriteria(Criteria{
 		FilterType: FilterTypeSearchText,
 		Value:      query,

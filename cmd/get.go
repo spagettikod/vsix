@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	getCmd.Flags().StringVarP(&out, "output", "o", ".", "Output directory for downloaded files")
-	getCmd.Flags().BoolVarP(&forceget, "force", "f", false, "Force download eventhough the version already exists in output folder")
+	getCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
+	getCmd.Flags().BoolVarP(&forceget, "force", "f", false, "force download eventhough the version already exists in output folder")
 	rootCmd.AddCommand(getCmd)
 }
 
@@ -41,6 +44,7 @@ given version does not exist.`,
 
 func get(pe ExtensionRequest) {
 	if err := pe.Download(out); err != nil {
-		ErrLog.Fatalf("%s: %s", pe, err)
+		fmt.Printf("%s: %s\n", pe, err)
+		os.Exit(1)
 	}
 }

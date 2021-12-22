@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -14,13 +13,15 @@ import (
 )
 
 const (
-	propKeyExtensionPack = "Microsoft.VisualStudio.Code.ExtensionPack"
-	debugEnvVar          = "VSIX_DEBUG"
+	propKeyExtensionPack      = "Microsoft.VisualStudio.Code.ExtensionPack"
+	debugEnvVar               = "VSIX_DEBUG"
+	ExtensionMetadataFileName = "_vsix_db_extension_metadata.json"
 )
 
 var (
 	ErrExtensionNotFound      = errors.New("extension could not be found at Marketplace")
 	ErrExtensionHasNoVersions = errors.New("extension has no versions")
+	ErrVersionNotFound        = errors.New("version was not found for this extension")
 )
 
 type extensionQueryResponse struct {
@@ -30,73 +31,35 @@ type extensionQueryResponse struct {
 }
 
 type Extension struct {
-	Publisher struct {
-		ID          string `json:"publisherId"`
-		Name        string `json:"publisherName"`
-		DisplayName string `json:"displayName"`
-	} `json:"publisher"`
-	Name             string    `json:"extensionName"`
-	ID               string    `json:"extensionID"`
-	DisplayName      string    `json:"displayName"`
-	ShortDescription string    `json:"shortDescription"`
-	ReleaseDate      time.Time `json:"releaseDate"`
-	LastUpdated      time.Time `json:"lastUpdated"`
-	Versions         []Version `json:"versions,omitempty"`
-	Statistics       []struct {
-		Name  string  `json:"statisticName"`
-		Value float32 `json:"value"`
-	} `json:"statistics"`
+	Categorties      []string    `json:"categories"`
+	DeploymentType   int         `json:"deploymentType"`
+	DisplayName      string      `json:"displayName"`
+	ID               string      `json:"extensionID"`
+	Name             string      `json:"extensionName"`
+	Flags            string      `json:"flags"`
+	LastUpdated      time.Time   `json:"lastUpdated"`
+	PublishedDate    time.Time   `json:"publishedDate"`
+	Publisher        Publisher   `json:"publisher"`
+	ReleaseDate      time.Time   `json:"releaseDate"`
+	ShortDescription string      `json:"shortDescription"`
+	Statistics       []Statistic `json:"statistics"`
+	Tags             []string    `json:"tags"`
+	Versions         []Version   `json:"versions,omitempty"`
+	Path             string      `json:"-"`
 }
 
-func BuildDatabase(root string) ([]Extension, error) {
-	root = path.Join(root, "extensions")
-	rootFS := os.DirFS(root)
-	versions := []Version{}
-	exts := []Extension{}
-	ver := Version{}
-	extName := ""
-	err := fs.WalkDir(rootFS, ".", func(p string, d fs.DirEntry, err error) error {
-		fmt.Println(p)
-		// example: p == golang/go/metadata.json
-		if p == path.Join(extName, "metadata.json") {
-			b, err := ioutil.ReadFile(path.Join(root, p))
-			if err != nil {
-				return err
-			}
-			ext := Extension{}
-			err = json.Unmarshal(b, &ext)
-			if err != nil {
-				return err
-			}
-			versions = append(versions, ver)
-			ext.Versions = versions
-			exts = append(exts, ext)
-			return nil
-		}
-		// example: p == golang/go
-		if strings.Count(p, "/") == 1 {
-			extName = p
-			versions = versions[:0]
-			return nil
-		}
-		// example: p == golang/go/0.26.0
-		if strings.Count(p, "/") == 2 {
-			if ver.Version != "" {
-				versions = append(versions, ver)
-			}
-			ver = Version{Version: strings.Split(p, "/")[2]}
-			return nil
-		}
-		// example: p == golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest
-		if strings.Count(p, "/") == 4 {
-			asset := Asset{Source: p}
-			asset.Type = AssetTypeKey(strings.Split(p, "/")[4])
-			ver.Files = append(ver.Files, asset)
-			return nil
-		}
-		return nil
-	})
-	return exts, err
+type Publisher struct {
+	ID              string `json:"publisherId"`
+	Name            string `json:"publisherName"`
+	DisplayName     string `json:"displayName"`
+	Flags           string `json:"flags"`
+	Domain          string `json:"domain"`
+	IsDomainVerfied bool   `json:"isDomainVerified"`
+}
+
+type Statistic struct {
+	Name  string  `json:"statisticName"`
+	Value float32 `json:"value"`
 }
 
 func Search(query string, limit int, sortBy SortCriteria) ([]Extension, error) {
@@ -120,6 +83,7 @@ func NewExtension(uniqueID string) (Extension, error) {
 	return eqr.Results[0].Extensions[0], err
 }
 
+// Assets return the assets for a certain version of an extension.
 func (e Extension) Assets(version string) ([]Asset, bool) {
 	for _, v := range e.Versions {
 		if version == v.Version {
@@ -129,6 +93,7 @@ func (e Extension) Assets(version string) ([]Asset, bool) {
 	return []Asset{}, false
 }
 
+// Asset return the asset for a certain version on an extension.
 func (e Extension) Asset(version string, assetType AssetTypeKey) (Asset, bool) {
 	if assets, exists := e.Assets(version); exists {
 		for _, a := range assets {
@@ -140,17 +105,20 @@ func (e Extension) Asset(version string, assetType AssetTypeKey) (Asset, bool) {
 	return Asset{}, false
 }
 
-// Dir return the path of this extension. The path does not include the output directory, only the path within the output directory.
-func (e Extension) Dir() string {
-	return path.Join("extensions", strings.ToLower(e.Publisher.Name), strings.ToLower(e.Name))
+func (e Extension) AbsDir(root string) string {
+	return path.Join(root, strings.ToLower(e.Publisher.Name), strings.ToLower(e.Name))
 }
 
 // MetaPath return the path to the metadata.json file for this extension. The path does not include the output directory, only the path within the output directory.
-func (e Extension) MetaPath() string {
-	return path.Join(e.Dir(), "metadata.json")
+func (e Extension) AbsMetadataFile(root string) string {
+	return path.Join(e.AbsDir(root), ExtensionMetadataFileName)
 }
 
-func (e Extension) SaveMetadata(outputPath string) error {
+func (e Extension) AbsVersionDir(root, version string) string {
+	return path.Join(e.AbsDir(root), version)
+}
+
+func (e Extension) SaveMetadata(root string) error {
 	// re-run query to populate statistics, list versions query does not populate statistics, is there another way?
 	eqr, err := runQuery(latestQueryJSON(e.UniqueID()))
 	if err != nil {
@@ -158,11 +126,11 @@ func (e Extension) SaveMetadata(outputPath string) error {
 	}
 	newExt := eqr.Results[0].Extensions[0]
 	newExt.Versions = []Version{}
-	j, err := json.Marshal(newExt)
+	j, err := json.MarshalIndent(newExt, "", "   ")
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(path.Join(outputPath, e.MetaPath()), j, os.ModePerm)
+	return ioutil.WriteFile(e.AbsMetadataFile(root), j, os.ModePerm)
 }
 
 func (e Extension) IsExtensionPack() bool {
@@ -182,8 +150,9 @@ func (e Extension) ExtensionPack() []string {
 	return pack
 }
 
-func (e Extension) VersionExists(version, outputPath string) (bool, error) {
-	_, err := os.Stat(path.Join(outputPath, e.Dir(), version))
+func (e Extension) VersionExists(version, root string) (bool, error) {
+	dir := e.AbsVersionDir(root, version)
+	_, err := os.Stat(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
@@ -191,15 +160,6 @@ func (e Extension) VersionExists(version, outputPath string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func (e Extension) HasVersion(version string) bool {
-	for _, v := range e.Versions {
-		if v.Version == version {
-			return true
-		}
-	}
-	return false
 }
 
 func (e Extension) UniqueID() string {
@@ -246,6 +206,14 @@ func (e Extension) KeepVersions(versions ...string) Extension {
 	return newExt
 }
 
+func (e Extension) String() string {
+	b, err := json.MarshalIndent(e, "", "   ")
+	if err != nil {
+		return "! JSON UNMARSHAL FAILED !"
+	}
+	return string(b)
+}
+
 func runQuery(q string) (extensionQueryResponse, error) {
 	if _, debug := os.LookupEnv(debugEnvVar); debug {
 		ioutil.WriteFile("query.json", []byte(q), 0644)
@@ -288,4 +256,13 @@ func runQuery(q string) (extensionQueryResponse, error) {
 // LatestVersion returns the latest version number for the extension with the given unique ID.
 func (e Extension) LatestVersion() string {
 	return e.Versions[0].Version
+}
+
+func (e Extension) Version(version string) (Version, bool) {
+	for _, v := range e.Versions {
+		if v.Version == version {
+			return v, true
+		}
+	}
+	return Version{}, false
 }

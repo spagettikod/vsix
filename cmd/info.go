@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 
 	"github.com/spf13/cobra"
@@ -20,10 +22,11 @@ var infoCmd = &cobra.Command{
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		VerboseLog.Printf("%s: looking up extension at Marketplace", args[0])
+		log.Info().Str("identifier", args[0]).Msg("looking up extension at Marketplace")
 		ext, err := vscode.NewExtension(args[0])
 		if err != nil {
-			ErrLog.Fatalln(err)
+			fmt.Println(err)
+			os.Exit(1)
 		}
 		s := `Name:           %s
 Publisher:      %s

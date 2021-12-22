@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "Limit number of results")
-	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "Sort critera, valid values are: none, install")
+	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "limit number of results")
+	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install")
 	rootCmd.AddCommand(searchCmd)
 }
 
@@ -26,16 +27,19 @@ var searchCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		q := args[0]
 		if len(q) < 3 {
-			ErrLog.Fatalln("query parameter must cotain atleast 3 characters")
+			fmt.Println("query parameter must cotain atleast 3 characters")
+			os.Exit(1)
 		}
-		VerboseLog.Printf("%s: looking up extension at Marketplace", q)
+		log.Info().Str("query", q).Msg("looking up extension at Marketplace")
 		sortCritera, err := parseSortCriteria(sortByFlag)
 		if err != nil {
-			ErrLog.Fatalln(err)
+			fmt.Println(err)
+			os.Exit(1)
 		}
 		exts, err := vscode.Search(q, limit, sortCritera)
 		if err != nil {
-			ErrLog.Fatalln(err)
+			fmt.Println(err)
+			os.Exit(1)
 		}
 		data := [][]string{}
 		for _, ext := range exts {

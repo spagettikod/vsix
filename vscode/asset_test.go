@@ -1,32 +1,24 @@
 package vscode
 
 import (
-	"encoding/json"
-	"fmt"
-	"mime"
-	"net/url"
-	"path"
 	"testing"
 )
 
-func Test_t(t *testing.T) {
-	u, _ := url.Parse("https://golang.gallerycdn.vsassets.io/extensions/golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest")
+func Test_Abs(t *testing.T) {
+	// localPath := "tmp"
+	// tests := map[string]string{
+	// 	"https://golang.gallerycdn.vsassets.io/extensions/golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest": localPath + "/golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest",
+	// 	"https://vscodevim.gallery.vsassets.io/_apis/public/gallery/publisher/vscodevim/extension/vim/0.0.1/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage": localPath + ""
+	// }
 
-	fmt.Println(u.Host)
-	fmt.Println(u.Path)
-	fmt.Println(path.Split(u.Path))
+	// for test, expected := range tests {
+	// 	a := Asset{
+	// 		Source: test,
+	// 	}
 
-	fmt.Println(mime.ExtensionsByType("application/json"))
-}
-
-func Test_a(t *testing.T) {
-	exts, err := BuildDatabase("/home/roland/development/vsix/_data")
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := json.MarshalIndent(exts, "", "  ")
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println(string(b))
+	// 	actual := a.Abs(localPath)
+	// 	if actual != expected {
+	// 		t.Errorf("expected %s, got %s", expected, actual)
+	// 	}
+	// }
 }

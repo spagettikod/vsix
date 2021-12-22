@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 )
@@ -14,6 +13,7 @@ type AssetTypeKey string
 type Asset struct {
 	Type   AssetTypeKey `json:"assetType"`
 	Source string       `json:"source"`
+	Path   string       `json:"-"`
 }
 
 const (
@@ -58,19 +58,21 @@ func (a Asset) Is(t AssetTypeKey) bool {
 	return a.Type == t
 }
 
-func (a Asset) Abs(p string) string {
-	u, err := url.Parse(a.Source)
-	if err != nil {
-		return ""
-	}
-	return path.Join(p, u.Path)
-}
+// Abs returns the local file path by parsing the extension URL and adding the local path p.
+// func (a Asset) Abs(p string) string {
+// 	u, err := url.Parse(a.Source)
+// 	if err != nil {
+// 		return ""
+// 	}
 
-func (a Asset) Download(p string) error {
-	u, err := url.Parse(a.Source)
-	if err != nil {
-		return err
-	}
+// 	// remote path has the format https://golang.gallerycdn.vsassets.io/extensions/golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest
+// 	// we want to remove the extensions part for local storage. This makes it easier to find the extensions later when serving them.
+// 	localPath := u.Path[len("/extensions"):]
+
+// 	return path.Join(p, localPath)
+// }
+
+func (a Asset) Download(versionPath string) error {
 	resp, err := http.Get(a.Source)
 	if err != nil {
 		return err
@@ -79,8 +81,6 @@ func (a Asset) Download(p string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(path.Join(p, path.Dir(u.Path)), os.ModePerm); err != nil {
-		return err
-	}
-	return ioutil.WriteFile(a.Abs(p), b, os.ModePerm)
+	filename := path.Join(versionPath, string(a.Type))
+	return ioutil.WriteFile(filename, b, os.ModePerm)
 }
