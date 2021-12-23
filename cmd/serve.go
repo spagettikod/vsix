@@ -10,8 +10,10 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"path"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/justinas/alice"
@@ -74,12 +76,7 @@ Set the URL to your server, for example https://vsix.example.com:8080, see Examp
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		if db.Empty() {
-			log.Info().Msgf("could not find any extensions at %v", root)
-		} else {
-			stats := db.Stats()
-			log.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
-		}
+		reloadListener(db)
 
 		stack := alice.New(
 			hlog.NewHandler(log.Logger),
@@ -268,4 +265,19 @@ func serverError(w http.ResponseWriter, r *http.Request, err error) {
 		Err(err).
 		Send()
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func reloadListener(db *db.DB) {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, syscall.SIGHUP)
+
+	// Block until a signal is received.
+	go func() {
+		for range c {
+			log.Info().Msg("recieved SIGHUP signal, reloading database")
+			if err := db.Reload(); err != nil {
+				log.Fatal().Err(err).Msg("error while reloading database, exiting")
+			}
+		}
+	}()
 }

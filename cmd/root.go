@@ -14,7 +14,7 @@ import (
 var (
 	rootCmd = &cobra.Command{
 		Use:   "vsix",
-		Short: "Command line interface tool for Visual Studio Code Extension Marketplace.",
+		Short: "Visual Studio Code Extension Marketplace command line interface tool.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if !jsonLog {
 				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})

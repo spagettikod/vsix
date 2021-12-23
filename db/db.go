@@ -38,8 +38,25 @@ func New(root, assetEndpoint string) (*DB, error) {
 		items:         []vscode.Extension{},
 		assetEndpoint: assetEndpoint,
 	}
-	err := db.load(root)
+	err := db.load()
+
+	if db.Empty() {
+		log.Info().Msgf("could not find any extensions at %v", root)
+	} else {
+		stats := db.Stats()
+		log.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
+	}
+
 	return db, err
+}
+
+func (db *DB) Reload() error {
+	ndb, err := New(db.Root, db.assetEndpoint)
+	if err != nil {
+		return err
+	}
+	db.items = ndb.items
+	return nil
 }
 
 // func (db *DB) Get(uniqueID string) (vscode.Extension, bool) {
@@ -132,8 +149,8 @@ func (db *DB) sortVersions() {
 	}
 }
 
-func (db *DB) load(root string) error {
-	absRoot, err := filepath.Abs(root)
+func (db *DB) load() error {
+	absRoot, err := filepath.Abs(db.Root)
 	if err != nil {
 		return err
 	}
