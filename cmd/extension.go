@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -42,19 +43,20 @@ func NewFromFile(p string) ([]ExtensionRequest, error) {
 			}
 		}
 	} else {
-		exts, err := parseFile(p)
+		newErs, err := parseFile(p)
 		if err != nil {
-			return ers, err
+			return newErs, err
 		}
-		ers = append(ers, exts...)
+		ers = append(ers, newErs...)
 	}
+	log.Debug().Msgf("found %v extensions in total", len(ers))
 	return ers, err
 }
 
 func parseFile(p string) ([]ExtensionRequest, error) {
 	exts := []ExtensionRequest{}
 
-	plog := log.With().Str("path", p).Logger()
+	plog := log.With().Str("filename", p).Logger()
 
 	plog.Info().Msg("found file")
 	data, err := ioutil.ReadFile(p)
@@ -62,11 +64,12 @@ func parseFile(p string) ([]ExtensionRequest, error) {
 		return exts, err
 	}
 	if isPlainText(data) {
-		plog.Info().Msg("parsing file")
-		exts, err := parse(data)
+		plog.Debug().Msg("parsing file")
+		exts, err = parse(data)
 		if err != nil {
 			return exts, err
 		}
+		plog.Info().Msgf("found %v extentions in file", len(exts))
 	} else {
 		plog.Info().Msg("skipping, not a text file")
 	}
@@ -114,20 +117,82 @@ func parse(data []byte) (extensions []ExtensionRequest, err error) {
 			}
 			extensions = append(extensions, ext)
 			if ext.Version == "" {
-				log.Info().Str("extension", ext.UniqueID).Msg("parsed")
+				log.Debug().Str("extension", ext.UniqueID).Msg("parsed")
 			} else {
-				log.Info().Str("extension", ext.UniqueID).Str("version", ext.Version).Msg("parsed")
+				log.Debug().Str("extension", ext.UniqueID).Str("version", ext.Version).Msg("parsed")
 			}
 		}
 	}
 	return extensions, scanner.Err()
 }
 
-func (pe ExtensionRequest) Download(root string) error {
+// rewrite this, half the code is the same as Download, recursive function complicates things,
+// maybe rethink the entire setup?
+func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
+	elog := log.With().Str("extension", pe.UniqueID).Str("dir", root).Logger()
+
+	elog.Debug().Msg("only VSIXPackage will be fetched")
+	elog.Debug().Msg("checking if output directory exists")
 	if exists, err := outDirExists(root); !exists {
 		return err
 	}
-	elog := log.With().Str("extension", pe.UniqueID).Logger()
+
+	elog.Info().Msg("searching for extension at Marketplace")
+	ext, err := vscode.NewExtension(pe.UniqueID)
+	if err != nil {
+		return err
+	}
+	if ext.IsExtensionPack() {
+		elog.Info().Msg("is extension pack, getting pack contents")
+		for _, pack := range ext.ExtensionPack() {
+			erPack := ExtensionRequest{UniqueID: pack}
+			err := erPack.DownloadVSIXPackage(root)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if pe.Version == "" {
+		elog.Debug().Msg("version was not specified, setting to latest version")
+		pe.Version = ext.LatestVersion()
+	}
+	if _, found := ext.Version(pe.Version); !found {
+		return ErrVersionNotFound
+	}
+	elog = elog.With().Str("version", pe.Version).Logger()
+
+	elog.Debug().Msg("version has been determined")
+	filename := path.Join(root, fmt.Sprintf("%s-%s.vsix", ext.UniqueID(), pe.Version))
+	elog = elog.With().Str("destination", filename).Logger()
+	elog.Debug().Msg("checking if destination already exists")
+	if _, err = os.Stat(filename); err == nil {
+		elog.Info().Msg("skipping download, version already exist at output path")
+		return nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	asset, found := ext.Asset(pe.Version, vscode.VSIXPackage)
+	if !found {
+		return fmt.Errorf("version %s did not contain a VSIX package", pe.Version)
+	}
+	elog.Info().
+		Str("source", asset.Source).
+		Msg("downloading")
+	// download setting filename to asset type
+	return asset.Download(filename)
+}
+
+func (pe ExtensionRequest) Download(root string) error {
+	elog := log.With().Str("extension", pe.UniqueID).Str("dir", root).Logger()
+
+	elog.Debug().Msg("checking if output directory exists")
+	if exists, err := outDirExists(root); !exists {
+		return err
+	}
+
 	elog.Info().Msg("searching for extension at Marketplace")
 	ext, err := vscode.NewExtension(pe.UniqueID)
 	if err != nil {
@@ -144,13 +209,14 @@ func (pe ExtensionRequest) Download(root string) error {
 		}
 	}
 	if pe.Version == "" {
+		elog.Debug().Msg("version was not specified, setting to latest version")
 		pe.Version = ext.LatestVersion()
 	}
 	if _, found := ext.Version(pe.Version); !found {
 		return ErrVersionNotFound
 	}
 	elog.Info().Str("version", pe.Version).Msg("found version")
-	if exists, err := ext.VersionExists(pe.Version, root); !forceget && (exists || err != nil) {
+	if exists, err := ext.VersionExists(pe.Version, root); exists || err != nil {
 		if exists {
 			elog.Info().Str("version", pe.Version).Msg("skipping download, version already exist at output path")
 			return nil
@@ -160,24 +226,25 @@ func (pe ExtensionRequest) Download(root string) error {
 
 	// create version directory where files are saved
 	versionDir := ext.AbsVersionDir(root, pe.Version)
+	elog.Debug().Str("destination", versionDir).Msg("checking if version destination already exists")
 	if err := os.MkdirAll(versionDir, os.ModePerm); err != nil {
 		return err
 	}
 
 	assets, _ := ext.Assets(pe.Version)
 	for _, asset := range assets {
+		// download setting filename to asset type
+		filename := path.Join(versionDir, string(asset.Type))
 		elog.Info().
-			Str("version", pe.Version).
 			Str("source", asset.Source).
-			Str("destination", versionDir).
+			Str("destination", filename).
 			Msg("downloading")
-		if err := asset.Download(versionDir); err != nil {
+		if err := asset.Download(filename); err != nil {
 			return err
 		}
 	}
 
 	elog.Info().
-		Str("version", pe.Version).
 		Str("destination", ext.AbsVersionDir(root, pe.Version)).
 		Msg("saving version metadata")
 	version, found := ext.Version(pe.Version)
@@ -189,7 +256,6 @@ func (pe ExtensionRequest) Download(root string) error {
 	}
 
 	elog.Info().
-		Str("version", pe.Version).
 		Str("destination", ext.AbsMetadataFile(root)).
 		Msg("saving extension metadata")
 	return ext.SaveMetadata(root)

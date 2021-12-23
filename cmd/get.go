@@ -9,22 +9,20 @@ import (
 
 func init() {
 	getCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
-	getCmd.Flags().BoolVarP(&forceget, "force", "f", false, "force download eventhough the version already exists in output folder")
 	rootCmd.AddCommand(getCmd)
 }
 
 var getCmd = &cobra.Command{
 	Use:   "get [flags] <identifier> [version]",
-	Short: "Download extension",
-	Long: `Get will download the extension from the Marketplace. Extension identifier
+	Short: "Download VSIX file from the Marketplace",
+	Long: `Get will download the extension VSIX file from the Marketplace. Extension identifier
 can be found on the Visual Studio Code Marketplace web page for a given extension
 where it's called "Unique Identifier". If the extension is a "Extension Pack",
-which is a collection of extentions, all those extension will also be downloaded
-as well.
+which is a collection of extensions, all those extension will be downloaded as well.
 
 If version is not specified the latest version will be downloaded. The extension is
 downloaded to the current directory unless the output-flag is set. Download is skipped
-if the extension already exists in the output directory.
+if the extension already exist in the output directory.
 
 The command will exit with a non zero value if the extension can not be found or the
 given version does not exist.`,
@@ -43,7 +41,7 @@ given version does not exist.`,
 }
 
 func get(pe ExtensionRequest) {
-	if err := pe.Download(out); err != nil {
+	if err := pe.DownloadVSIXPackage(out); err != nil {
 		fmt.Printf("%s: %s\n", pe, err)
 		os.Exit(1)
 	}

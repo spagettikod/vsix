@@ -16,7 +16,7 @@ func init() {
 }
 
 var batchCmd = &cobra.Command{
-	Use:   "batch <file|dir>",
+	Use:   "batch [flags] <file|dir>",
 	Short: "Download multiple packages specified in a input file or files in a directory",
 	Long: `Batch will download all the extensions specified in a text file. If a directory is
 given as input all text files in that directory (and its sub directories) will be parsed
@@ -45,7 +45,7 @@ output but the execution will not stop.`,
 			os.Exit(1)
 		}
 		if len(extensions) == 0 {
-			fmt.Printf("no extensions found at path '%s'", args[0])
+			fmt.Printf("no extensions found at path '%s', exiting\n", args[0])
 			os.Exit(1)
 		}
 		loggedErrors := 0

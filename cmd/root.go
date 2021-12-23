@@ -34,7 +34,6 @@ var (
 	out                string // used by sub-commands
 	limit              int    // used by sub-commands
 	sortByFlag         string // used by sub-commands
-	forceget           bool   // used by sub-commands
 	serveDBRoot        string // used by sub-commands
 	serveAddr          string // used by sub-commands
 	ErrFileExists      error  = errors.New("extension has already been downloaded")

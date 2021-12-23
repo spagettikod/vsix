@@ -5,7 +5,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 )
 
 type AssetTypeKey string
@@ -72,7 +71,7 @@ func (a Asset) Is(t AssetTypeKey) bool {
 // 	return path.Join(p, localPath)
 // }
 
-func (a Asset) Download(versionPath string) error {
+func (a Asset) Download(filename string) error {
 	resp, err := http.Get(a.Source)
 	if err != nil {
 		return err
@@ -81,6 +80,5 @@ func (a Asset) Download(versionPath string) error {
 	if err != nil {
 		return err
 	}
-	filename := path.Join(versionPath, string(a.Type))
 	return ioutil.WriteFile(filename, b, os.ModePerm)
 }
