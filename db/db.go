@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
@@ -25,11 +26,15 @@ type DB struct {
 	Root          string
 	items         []vscode.Extension
 	assetEndpoint string
+	loadDuration  time.Duration
+	loadedAt      time.Time
 }
 
 type DBStats struct {
 	ExtensionCount int
 	VersionCount   int
+	// time it took to load the database from disk
+	LoadDuration time.Duration
 }
 
 func New(root, assetEndpoint string) (*DB, error) {
@@ -56,7 +61,33 @@ func (db *DB) Reload() error {
 		return err
 	}
 	db.items = ndb.items
+	db.loadDuration = ndb.loadDuration
+	db.loadedAt = ndb.loadedAt
 	return nil
+}
+
+// Inconsistent returns true if the database in memory is inconsistent with files on disk.
+// Currently it only checks if version folders have been modified since the last database load.
+func (db *DB) Inconsistent() (bool, error) {
+	start := time.Now()
+	absRoot, err := filepath.Abs(db.Root)
+	if err != nil {
+		return false, err
+	}
+	for _, extensionRoot := range listExtensions(absRoot) {
+		log.Debug().Str("path", extensionRoot).Msg("found extension, checking metadata file")
+		fi, err := os.Stat(path.Join(extensionRoot, vscode.ExtensionMetadataFileName))
+		if err != nil {
+			return false, err
+		}
+		if db.loadedAt.Before(fi.ModTime()) {
+			log.Debug().Str("path", extensionRoot).Msg("extension was modified")
+			return true, nil
+		}
+		log.Debug().Str("path", extensionRoot).Msg("extension has not been modified")
+	}
+	log.Debug().Msgf("database inconsistency check took %.3f", time.Since(start).Seconds())
+	return false, nil
 }
 
 // func (db *DB) Get(uniqueID string) (vscode.Extension, bool) {
@@ -133,7 +164,9 @@ func (db *DB) List() []vscode.Extension {
 
 // Stats return some statistics about the database.
 func (db *DB) Stats() DBStats {
-	stats := DBStats{}
+	stats := DBStats{
+		LoadDuration: db.loadDuration,
+	}
 	stats.ExtensionCount = len(db.items)
 	for _, i := range db.items {
 		stats.VersionCount += len(i.Versions)
@@ -150,6 +183,7 @@ func (db *DB) sortVersions() {
 }
 
 func (db *DB) load() error {
+	start := time.Now()
 	absRoot, err := filepath.Abs(db.Root)
 	if err != nil {
 		return err
@@ -181,6 +215,10 @@ func (db *DB) load() error {
 	}
 	db.items = exts
 	db.sortVersions()
+
+	db.loadDuration = time.Since(start)
+	db.loadedAt = time.Now()
+	log.Debug().Msgf("loading database took %.3fs", db.loadDuration.Seconds())
 	return nil
 }
 

@@ -76,7 +76,7 @@ Set the URL to your server, for example https://vsix.example.com:8080, see Examp
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		reloadListener(db)
+		startSIGHUPListener(db)
 
 		stack := alice.New(
 			hlog.NewHandler(log.Logger),
@@ -267,7 +267,26 @@ func serverError(w http.ResponseWriter, r *http.Request, err error) {
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 }
 
-func reloadListener(db *db.DB) {
+func startInconsistencyChecker(db *db.DB) {
+	go func() {
+		for {
+			log.Debug().Msg("checking database for inconsistencies")
+			i, err := db.Inconsistent()
+			if err != nil {
+				log.Fatal().Err(err).Msg("error while checking database for inconsistencies, exiting")
+			}
+			if i {
+				err := db.Reload()
+				if err != nil {
+					log.Fatal().Err(err).Msg("error while reloading database, exiting")
+				}
+			}
+			time.Sleep(time.Second * 5)
+		}
+	}()
+}
+
+func startSIGHUPListener(db *db.DB) {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGHUP)
 
