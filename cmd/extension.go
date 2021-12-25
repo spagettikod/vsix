@@ -185,26 +185,29 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 	return asset.Download(filename)
 }
 
-func (pe ExtensionRequest) Download(root string) error {
+// Download will fetch the extension all its assets making it ready to be
+// served by the serve command. It returns true if a download occured and
+// false if the requested version already exists at output.
+func (pe ExtensionRequest) Download(root string) (bool, error) {
 	elog := log.With().Str("extension", pe.UniqueID).Str("dir", root).Logger()
 
 	elog.Debug().Msg("checking if output directory exists")
 	if exists, err := outDirExists(root); !exists {
-		return err
+		return false, err
 	}
 
 	elog.Info().Msg("searching for extension at Marketplace")
 	ext, err := vscode.NewExtension(pe.UniqueID)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if ext.IsExtensionPack() {
 		elog.Info().Msg("is extension pack, getting pack contents")
 		for _, pack := range ext.ExtensionPack() {
 			erPack := ExtensionRequest{UniqueID: pack}
-			err := erPack.Download(root)
+			_, err := erPack.Download(root)
 			if err != nil {
-				return err
+				return false, err
 			}
 		}
 	}
@@ -213,22 +216,22 @@ func (pe ExtensionRequest) Download(root string) error {
 		pe.Version = ext.LatestVersion()
 	}
 	if _, found := ext.Version(pe.Version); !found {
-		return ErrVersionNotFound
+		return false, ErrVersionNotFound
 	}
 	elog.Info().Str("version", pe.Version).Msg("found version")
 	if exists, err := ext.VersionExists(pe.Version, root); exists || err != nil {
 		if exists {
 			elog.Info().Str("version", pe.Version).Msg("skipping download, version already exist at output path")
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 
 	// create version directory where files are saved
 	versionDir := ext.AbsVersionDir(root, pe.Version)
 	elog.Debug().Str("destination", versionDir).Msg("checking if version destination already exists")
 	if err := os.MkdirAll(versionDir, os.ModePerm); err != nil {
-		return err
+		return false, err
 	}
 
 	assets, _ := ext.Assets(pe.Version)
@@ -240,7 +243,7 @@ func (pe ExtensionRequest) Download(root string) error {
 			Str("destination", filename).
 			Msg("downloading")
 		if err := asset.Download(filename); err != nil {
-			return err
+			return false, err
 		}
 	}
 
@@ -249,16 +252,16 @@ func (pe ExtensionRequest) Download(root string) error {
 		Msg("saving version metadata")
 	version, found := ext.Version(pe.Version)
 	if !found {
-		return fmt.Errorf("error while saving version metadata %w", vscode.ErrVersionNotFound)
+		return false, fmt.Errorf("error while saving version metadata %w", vscode.ErrVersionNotFound)
 	}
 	if err := version.SaveMetadata(ext.AbsVersionDir(root, pe.Version)); err != nil {
-		return err
+		return false, err
 	}
 
 	elog.Info().
 		Str("destination", ext.AbsMetadataFile(root)).
 		Msg("saving extension metadata")
-	return ext.SaveMetadata(root)
+	return true, ext.SaveMetadata(root)
 }
 
 func outDirExists(path string) (bool, error) {

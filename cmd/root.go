@@ -17,7 +17,7 @@ var (
 		Short: "Visual Studio Code Extension Marketplace command line interface tool.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			if !jsonLog {
-				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 			}
 			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 			if verbose {
