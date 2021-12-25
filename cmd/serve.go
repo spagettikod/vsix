@@ -10,10 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/signal"
 	"path"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/justinas/alice"
@@ -38,12 +36,16 @@ func init() {
 var serveCmd = &cobra.Command{
 	Use:   "serve [flags] <external URL> <cert file> <key file>",
 	Short: "Serve downloaded extensions to Visual Studio Code",
-	Long: `This command will start a HTTPS server that is compatible with Visual Studio Code and you can
-search, browse and install your extension from within Visual Studio Code.
+	Long: `This command will start a HTTPS server that is compatible with Visual Studio Code.
+When setup you can browse, search and install extensions previously downloaded
+using the sync command.
 
-To enable Visual Studio Code integration you must change the tag serviceUrl in the file project.json in your
-Visual Studio Code installation. On my MacOS installation it is located at /Applications/Visual Studio Code.app/Contents/Resources/app/product.json.
-Set the URL to your server, for example https://vsix.example.com:8080, see Examples below.
+To enable Visual Studio Code integration you must change the tag serviceUrl in
+the file project.json in your Visual Studio Code installation. On MacOS, for
+example, the file is located at
+/Applications/Visual Studio Code.app/Contents/Resources/app/product.json. Set
+the URL to your server, for example https://vsix.example.com:8080, see Examples
+below.
 `,
 	Example: `  $ vsix serve https://vsix.example.com:8080 myserver.crt myserver.key
       - extensions are located in the current directory
@@ -76,7 +78,6 @@ Set the URL to your server, for example https://vsix.example.com:8080, see Examp
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		startSIGHUPListener(db)
 
 		stack := alice.New(
 			hlog.NewHandler(log.Logger),
@@ -265,38 +266,4 @@ func serverError(w http.ResponseWriter, r *http.Request, err error) {
 		Err(err).
 		Send()
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-}
-
-func startInconsistencyChecker(db *db.DB) {
-	go func() {
-		for {
-			log.Debug().Msg("checking database for inconsistencies")
-			i, err := db.Inconsistent()
-			if err != nil {
-				log.Fatal().Err(err).Msg("error while checking database for inconsistencies, exiting")
-			}
-			if i {
-				err := db.Reload()
-				if err != nil {
-					log.Fatal().Err(err).Msg("error while reloading database, exiting")
-				}
-			}
-			time.Sleep(time.Second * 5)
-		}
-	}()
-}
-
-func startSIGHUPListener(db *db.DB) {
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGHUP)
-
-	// Block until a signal is received.
-	go func() {
-		for range c {
-			log.Info().Msg("recieved SIGHUP signal, reloading database")
-			if err := db.Reload(); err != nil {
-				log.Fatal().Err(err).Msg("error while reloading database, exiting")
-			}
-		}
-	}()
 }

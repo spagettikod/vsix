@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spagettikod/vsix/db"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
@@ -44,12 +44,10 @@ output but the execution will not stop.`,
 		start := time.Now()
 		extensions, err := NewFromFile(args[0])
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			log.Fatal().Err(err).Str("path", args[0]).Msg("error while reading extension specification files")
 		}
 		if len(extensions) == 0 {
-			fmt.Printf("no extensions found at path '%s', exiting\n", args[0])
-			os.Exit(1)
+			log.Fatal().Msgf("no extensions found at path '%s', exiting", args[0])
 		}
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
 		loggedErrors := 0
@@ -62,11 +60,14 @@ output but the execution will not stop.`,
 					log.Error().
 						Str("unique_id", pe.UniqueID).
 						Str("version", pe.Version).
+						Str("path", out).
 						Msg(err.Error())
 					loggedErrors++
 				} else {
-					fmt.Printf("%s: %s\n", pe, err)
-					os.Exit(1)
+					log.Fatal().
+						Err(err).
+						Str("path", out).
+						Msgf("unexpected error occured while syncing %s, exiting", pe)
 				}
 			}
 			if success {
@@ -78,7 +79,22 @@ output but the execution will not stop.`,
 				Msgf("sync took %.3fs", time.Since(extStart).Seconds())
 		}
 		log.Info().Msgf("total time for sync %.3fs", time.Since(start).Seconds())
-		fmt.Println(downloads)
+		if downloads > 0 {
+			log.Debug().
+				Str("path", out).
+				Int("downloads", downloads).
+				Int("download_errors", loggedErrors).
+				Msgf("notifying database that extension were downloaded")
+			err = db.Modified(out)
+			if err != nil {
+				log.Fatal().
+					Err(err).
+					Str("path", out).
+					Int("downloads", downloads).
+					Int("download_errors", loggedErrors).
+					Msg("could not notify database of extension update")
+			}
+		}
 		if loggedErrors > 0 {
 			os.Exit(78)
 		}

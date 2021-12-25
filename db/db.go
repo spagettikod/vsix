@@ -13,9 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 	"golang.org/x/mod/semver"
+)
+
+const (
+	modFilename string = ".modfile"
 )
 
 var (
@@ -28,6 +33,7 @@ type DB struct {
 	assetEndpoint string
 	loadDuration  time.Duration
 	loadedAt      time.Time
+	modFile       string
 }
 
 type DBStats struct {
@@ -42,8 +48,17 @@ func New(root, assetEndpoint string) (*DB, error) {
 		Root:          root,
 		items:         []vscode.Extension{},
 		assetEndpoint: assetEndpoint,
+		modFile:       path.Join(root, modFilename),
 	}
 	err := db.load()
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.autoreload()
+	if err != nil {
+		return nil, err
+	}
 
 	if db.Empty() {
 		log.Info().Msgf("could not find any extensions at %v", root)
@@ -53,6 +68,37 @@ func New(root, assetEndpoint string) (*DB, error) {
 	}
 
 	return db, err
+}
+
+func (db *DB) autoreload() error {
+	w, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+	w.Add(db.modFile)
+	go func() {
+		for {
+			<-w.Events
+			log.Debug().
+				Str("path", db.Root).
+				Msg("database has been modified, reloading")
+			err := db.Reload()
+			if err != nil {
+				log.Fatal().
+					Err(err).
+					Str("path", db.Root).
+					Msg("error while reloading database, exiting")
+			}
+		}
+	}()
+	go func() {
+		err := <-w.Errors
+		log.Fatal().
+			Err(err).
+			Str("path", db.Root).
+			Msg("error occured while monitoring .modfile, exiting")
+	}()
+	return nil
 }
 
 func (db *DB) Reload() error {
@@ -66,39 +112,26 @@ func (db *DB) Reload() error {
 	return nil
 }
 
+// Modified notifies the database at path p that its content has been updated.
+func Modified(p string) error {
+	f, err := os.Create(path.Join(p, modFilename))
+	if err != nil {
+		return err
+	}
+	return f.Close()
+}
+
 // Inconsistent returns true if the database in memory is inconsistent with files on disk.
 // Currently it only checks if version folders have been modified since the last database load.
 func (db *DB) Inconsistent() (bool, error) {
-	start := time.Now()
-	absRoot, err := filepath.Abs(db.Root)
+	log.Debug().Str("path", db.modFile).Msg("checking modfile to see if database has been updated")
+	fi, err := os.Stat(db.modFile)
 	if err != nil {
 		return false, err
 	}
-	for _, extensionRoot := range listExtensions(absRoot) {
-		log.Debug().Str("path", extensionRoot).Msg("found extension, checking metadata file")
-		fi, err := os.Stat(path.Join(extensionRoot, vscode.ExtensionMetadataFileName))
-		if err != nil {
-			return false, err
-		}
-		if db.loadedAt.Before(fi.ModTime()) {
-			log.Debug().Str("path", extensionRoot).Msg("extension was modified")
-			return true, nil
-		}
-		log.Debug().Str("path", extensionRoot).Msg("extension has not been modified")
-	}
-	log.Debug().Msgf("database inconsistency check took %.3f", time.Since(start).Seconds())
-	return false, nil
+	log.Debug().Str("path", db.modFile).Msgf("is modfile updated? %v", db.loadedAt.Before(fi.ModTime()))
+	return db.loadedAt.Before(fi.ModTime()), nil
 }
-
-// func (db *DB) Get(uniqueID string) (vscode.Extension, bool) {
-// 	for _, i := range db.items {
-// 		if i.UniqueID() == uniqueID {
-// 			log.Println(i)
-// 			return i, true
-// 		}
-// 	}
-// 	return vscode.Extension{}, false
-// }
 
 // FindByUniqueID returns an array of extensions matching a list of uniqueID's. If keepLatestVersion is true only the latest
 // version is keep of all available version for returned extensions. When false all versions for an extension are included.

@@ -28,7 +28,7 @@ func NewFromFile(p string) ([]ExtensionRequest, error) {
 		return ers, err
 	}
 	if dir {
-		log.Info().Str("path", p).Msg("found directory")
+		log.Debug().Str("path", p).Msg("found directory")
 		fis, err := ioutil.ReadDir(p)
 		if err != nil {
 			return ers, err
@@ -196,7 +196,7 @@ func (pe ExtensionRequest) Download(root string) (bool, error) {
 		return false, err
 	}
 
-	elog.Info().Msg("searching for extension at Marketplace")
+	elog.Debug().Msg("searching for extension at Marketplace")
 	ext, err := vscode.NewExtension(pe.UniqueID)
 	if err != nil {
 		return false, err
@@ -218,7 +218,7 @@ func (pe ExtensionRequest) Download(root string) (bool, error) {
 	if _, found := ext.Version(pe.Version); !found {
 		return false, ErrVersionNotFound
 	}
-	elog.Info().Str("version", pe.Version).Msg("found version")
+	elog.Debug().Str("version", pe.Version).Msg("found version")
 	if exists, err := ext.VersionExists(pe.Version, root); exists || err != nil {
 		if exists {
 			elog.Info().Str("version", pe.Version).Msg("skipping download, version already exist at output path")
@@ -247,7 +247,7 @@ func (pe ExtensionRequest) Download(root string) (bool, error) {
 		}
 	}
 
-	elog.Info().
+	elog.Debug().
 		Str("destination", ext.AbsVersionDir(root, pe.Version)).
 		Msg("saving version metadata")
 	version, found := ext.Version(pe.Version)
@@ -258,7 +258,7 @@ func (pe ExtensionRequest) Download(root string) (bool, error) {
 		return false, err
 	}
 
-	elog.Info().
+	elog.Debug().
 		Str("destination", ext.AbsMetadataFile(root)).
 		Msg("saving extension metadata")
 	return true, ext.SaveMetadata(root)

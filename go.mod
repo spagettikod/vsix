@@ -3,6 +3,7 @@ module github.com/spagettikod/vsix
 go 1.17
 
 require (
+	github.com/fsnotify/fsnotify v1.5.1
 	github.com/justinas/alice v1.2.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/rs/zerolog v1.26.1
@@ -16,4 +17,5 @@ require (
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rs/xid v1.3.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	golang.org/x/sys v0.0.0-20211216021012-1d35b9e2eb4e // indirect
 )
