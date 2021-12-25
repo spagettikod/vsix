@@ -8,13 +8,17 @@ clean:
 	@rm -rf $(OUTPUT)
 
 pkg_docker:
-	@docker build -t spagettikod/vsix:$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
+#	@docker buildx create --use
+#	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
 
 test:
 	@docker build --target test . && docker rmi `docker image ls --filter label=vsix_intermediate=true -q`
 
 setup:
 	@mkdir -p $(OUTPUT)
+
+build_docker:
+	@docker build -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
 
 build_linux: setup
 	@env GOOS=linux GOARCH=amd64 go build -o $(OUTPUT) -ldflags "-X main.version=$(VERSION)" vsix.go
@@ -34,4 +38,4 @@ pkg_macos: build_macos
 pkg_macos_intel: build_macos_intel
 	@tar -C $(OUTPUT) -czf $(OUTPUT)/vsix$(VERSION).macos-amd64.tar.gz vsix
 
-all: clean pkg_linux pkg_macos pkg_macos_intel
+all: clean test pkg_linux pkg_macos pkg_macos_intel pkg_docker
