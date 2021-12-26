@@ -21,7 +21,7 @@ func init() {
 var searchCmd = &cobra.Command{
 	Use:                   "search <query>",
 	Short:                 "Search for extensions that matches query",
-	Example:               "vsix search docker",
+	Example:               "  $ vsix search docker",
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {

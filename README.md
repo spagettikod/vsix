@@ -15,6 +15,9 @@ You can keep a folder in sync with the Marketplace by specifying a list of exten
 vsix is distributed as a single binary file. The current release support the operating systems
 and architectures below.
 
+### Docker
+There is a Docker image available whit vsix.
+
 ### macOS
 This will install the latest version on macOS running on Intel.
 
@@ -111,16 +114,26 @@ xmtt.go-mod-grapher                     Go Mod Grapher                  xmtt    
 JFrog.jfrog-vscode-extension            JFrog                           JFrog                           1.9.1           2021-12-05T13:38:43Z    8539            5.00 (4)  
 ```
 ### `serve`
-This command will start a HTTPS server that is compatible with Visual Studio Code and you can
-search, browse and install your extension from within Visual Studio Code.
+This command will start a HTTPS server that is compatible with Visual Studio Code. When setup you can browse, search and install extensions previously downloaded using the sync command. If sync is run and new extensions are downloaded while the server is running it will automatically update with the newly downloaded extensions. 
 
-To enable Visual Studio Code integration you must change the tag serviceUrl in the file project.json in your
-Visual Studio Code installation. On my MacOS installation it is located at /Applications/Visual Studio Code.app/Contents/Resources/app/product.json.
-Set the URL to your server, for example https://vsix.example.com:8080, see Examples below.
+To enable Visual Studio Code integration you must change the tag serviceUrl in the file project.json in your Visual Studio Code installation. On MacOS, for example, the file is located at /Applications/Visual Studio Code.app/Contents/Resources/app/product.json. Set the URL to your server, for example https://vsix.example.com:8080.
+
+#### Example
+```bash
+$ vsix serve --data _data https://www.example.com/vsix myserver.crt myserver.key
+```
+
+```bash
+$ docker run -d -p 8443:8443 \
+      -v $(pwd):/data \
+      -v myserver.crt:/myserver.crt:ro \
+      -v myserver.key:/myserver.key:ro \
+      spagettikod/vsix serve /myserver.crt /myserver.key
+```
+
 
 ### `sync`
-Sync will download all the extensions specified in a text file. If a directory is
-given as input all text files in that directory (and its sub directories) will be parsed in search of extensions to download.
+Sync will download all the extensions specified in a text file. If a directory is given as input all text files in that directory (and its sub directories) will be parsed in search of extensions to download.
 
 Input file example:
 ```bash
@@ -131,11 +144,9 @@ Input file example:
   golang.Go 0.17.0
 ```
 
-Extensions are downloaded to the current folder unless the output-flag is set. The command return the number of extensions that were downloaded to stdout.
+Extensions are downloaded to the current folder unless the output-flag is set.
 
-The command will exit with exit code 78 if one of the extensions can not be found
-or a given version does not exist. These errors will be logged to standard error
-output but the execution will not stop.
+The command will exit with exit code 78 if one of the extensions can not be found or a given version does not exist. These errors will be logged to stderr output but the execution will not stop.
 
 ### `versions`
 List avilable versions for an extension.

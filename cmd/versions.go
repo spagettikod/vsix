@@ -17,7 +17,7 @@ func init() {
 var versionsCmd = &cobra.Command{
 	Use:                   "versions <identifier>",
 	Short:                 "List avilable versions for an extension",
-	Example:               "vsix versions golang.Go",
+	Example:               "  $ vsix versions golang.Go",
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {

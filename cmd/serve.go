@@ -29,7 +29,7 @@ const (
 
 func init() {
 	serveCmd.Flags().StringVarP(&serveDBRoot, "data", "d", ".", "directory where downloaded extensions are stored")
-	serveCmd.Flags().StringVarP(&serveAddr, "addr", "a", ":8080", "address where the server listens for connections")
+	serveCmd.Flags().StringVarP(&serveAddr, "addr", "a", "0.0.0.0:8443", "address where the server listens for connections")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -38,7 +38,9 @@ var serveCmd = &cobra.Command{
 	Short: "Serve downloaded extensions to Visual Studio Code",
 	Long: `This command will start a HTTPS server that is compatible with Visual Studio Code.
 When setup you can browse, search and install extensions previously downloaded
-using the sync command.
+using the sync command. If sync is run and new extensions are downloaded
+while the server is running it will automatically update with the newly
+downloaded extensions. 
 
 To enable Visual Studio Code integration you must change the tag serviceUrl in
 the file project.json in your Visual Studio Code installation. On MacOS, for
@@ -47,17 +49,13 @@ example, the file is located at
 the URL to your server, for example https://vsix.example.com:8080, see Examples
 below.
 `,
-	Example: `  $ vsix serve https://vsix.example.com:8080 myserver.crt myserver.key
-      - extensions are located in the current directory
-      - serviceUrl should be set to: https://vsix.example.com:8080
+	Example: `  $ vsix serve --data _data https://www.example.com/vsix myserver.crt myserver.key
 
-  $ vsix serve --data _data https://vsix.example.com:8080 myserver.crt myserver.key
-      - extensions are located in the sub-directory _data in the current directory
-      - serviceUrl should be set to: https://vsix.example.com:8080
-	
-  $ vsix serve --data _data https://www.example.com/vsix myserver.crt myserver.key
-      - extensions are located in the sub-directory _data in the current directory
-      - serviceUrl should be set to: https://www.example.com/vsix`,
+  $ docker run -d -p 8443:8443 \
+	-v $(pwd):/data \
+	-v myserver.crt:/myserver.crt:ro \
+	-v myserver.key:/myserver.key:ro \
+	spagettikod/vsix serve /myserver.crt /myserver.key`,
 	Args:                  cobra.MinimumNArgs(3),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {

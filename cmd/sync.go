@@ -30,14 +30,17 @@ Input file example:
   # This will download version 0.17.0 of the golang extension
   golang.Go 0.17.0
 	
-Extensions are downloaded to the current folder unless the output-flag is set. It 
-returns number of extensions that were downloaded to stdout.
+Extensions are downloaded to the current folder unless the output-flag is set.
 	
 The command will exit with exit code 78 if one of the extensions can not be found
-or a given version does not exist. These errors will be logged to standard error
+or a given version does not exist. These errors will be logged to stderr
 output but the execution will not stop.`,
-	Example: `  vsix sync my_extensions.txt
-  vsix sync -o downloads my_extensions.txt`,
+	Example: `  $ vsix sync -o downloads my_extensions.txt
+	
+  $ docker run --rm \
+	-v downloads:/data \
+	-v extensions_to_sync:/extensions_to_sync \
+	spagettikod/vsix sync /extensions_to_sync`,
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {

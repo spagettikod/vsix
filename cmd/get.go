@@ -26,9 +26,9 @@ if the extension already exist in the output directory.
 
 The command will exit with a non zero value if the extension can not be found or the
 given version does not exist.`,
-	Example: `  vsix get golang.Go
-  vsix get golang.Go 0.17.0
-  vsix get -o downloads golang.Go`,
+	Example: `  $ vsix get golang.Go
+  $ vsix get golang.Go 0.17.0
+  $ vsix get -o downloads golang.Go`,
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
