@@ -38,4 +38,4 @@ pkg_macos: build_macos
 pkg_macos_intel: build_macos_intel
 	@tar -C $(OUTPUT) -czf $(OUTPUT)/vsix$(VERSION).macos-amd64.tar.gz vsix
 
-all: clean test pkg_linux pkg_macos pkg_macos_intel pkg_docker
+all: clean test pkg_linux pkg_macos pkg_macos_intel

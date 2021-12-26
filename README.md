@@ -4,34 +4,44 @@ vsix is a CLI for Visual Studio Code Extension Marketplace. The tool can be usef
 You can keep a folder in sync with the Marketplace by specifying a list of extensions in a text file. These files can then be served internally using the `serve` command.
 
 ## Features
-* [get](#`get`) a VSIX package from the Marketplace to install locally in VS Code
-* [search](#`search`) for extensions by name
-* keep folder in [sync](#`sync`) with the marketplace
-* [serve](#`serve`) downloaded extensions locally
-* list available extension [versions](#`versions`)
-* display extension [information](#`info`) 
+* [get](#get) a VSIX package from the Marketplace to install locally in VS Code
+* [search](#search) for extensions by name
+* keep folder in [sync](#sync) with the marketplace
+* [serve](#serve) downloaded extensions locally
+* list available extension [versions](#versions)
+* display extension [information](#info) 
 
 ## Installation
 vsix is distributed as a single binary file. The current release support the operating systems
 and architectures below.
 
 ### Docker
-There is a Docker image available whit vsix.
+There is a Docker image available with `vsix`.
+
+```docker
+docker run --rm -it spagettikod/vsix info golang.Go
+```
+
+You can bind mount folders to `/data` in the container when syncing extensions.
+
+```docker
+docker run --rm -it spagettikod/vsix info golang.Go
+```
 
 ### macOS
 This will install the latest version on macOS running on Intel.
 
 ```
-curl -OL https://github.com/spagettikod/vsix/releases/download/v0.9.0/vsix0.9.0.macos-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix0.9.0.macos-amd64.tar.gz
+curl -OL https://github.com/spagettikod/vsix/releases/download/v1.0.0/vsix1.0.0.macos-amd64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix1.0.0.macos-amd64.tar.gz
 ```
 
 ### Linux
 This will install the latest version on many Linux distros as long as you have curl installed.
 
 ```
-curl -OL https://github.com/spagettikod/vsix/releases/download/v0.9.0/vsix0.9.0.linux-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix0.9.0.linux-amd64.tar.gz
+curl -OL https://github.com/spagettikod/vsix/releases/download/v1.0.0/vsix1.0.0.linux-amd64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix1.0.0.linux-amd64.tar.gz
 ```
 
 ## Usage
@@ -131,7 +141,6 @@ $ docker run -d -p 8443:8443 \
       spagettikod/vsix serve /myserver.crt /myserver.key
 ```
 
-
 ### `sync`
 Sync will download all the extensions specified in a text file. If a directory is given as input all text files in that directory (and its sub directories) will be parsed in search of extensions to download.
 
@@ -148,11 +157,19 @@ Extensions are downloaded to the current folder unless the output-flag is set.
 
 The command will exit with exit code 78 if one of the extensions can not be found or a given version does not exist. These errors will be logged to stderr output but the execution will not stop.
 
+#### Example
+```bash
+$ docker run -d \
+      -v $(pwd):/data \
+      -v my_extensions_to_sync:/my_extensions_to_sync
+      spagettikod/vsix sync /my_extensions_to_sync
+```
+
 ### `versions`
 List avilable versions for an extension.
 
 ```bash
-docker run --rm -it spagettikod/vsix verions golang.Go
+docker run --rm -it spagettikod/vsix versions golang.Go
 ```
 ```
 vsix version golang.Go
