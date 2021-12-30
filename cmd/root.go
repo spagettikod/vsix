@@ -36,6 +36,8 @@ var (
 	sortByFlag         string // used by sub-commands
 	serveDBRoot        string // used by sub-commands
 	serveAddr          string // used by sub-commands
+	serveCert          string // used by sub-commands
+	serveKey           string // used by sub-commands
 	ErrFileExists      error  = errors.New("extension has already been downloaded")
 	ErrVersionNotFound error  = errors.New("could not find version at Marketplace")
 	ErrOutDirNotFound  error  = errors.New("output dir does not exist")

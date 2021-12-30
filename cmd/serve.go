@@ -29,12 +29,14 @@ const (
 
 func init() {
 	serveCmd.Flags().StringVarP(&serveDBRoot, "data", "d", ".", "directory where downloaded extensions are stored")
-	serveCmd.Flags().StringVarP(&serveAddr, "addr", "a", "0.0.0.0:8443", "address where the server listens for connections")
+	serveCmd.Flags().StringVarP(&serveAddr, "addr", "a", "0.0.0.0:8080", "address where the server listens for connections (VSIX_EXTERNAL_URL)")
+	serveCmd.Flags().StringVarP(&serveCert, "cert", "c", "", "certificate file if serving with TLS (VSIX_CERT_FILE)")
+	serveCmd.Flags().StringVarP(&serveKey, "key", "k", "", "certificate key file if serving with TLS (VSIX_KEY_FILE)")
 	rootCmd.AddCommand(serveCmd)
 }
 
 var serveCmd = &cobra.Command{
-	Use:   "serve [flags] <external URL> <cert file> <key file>",
+	Use:   "serve [flags] <external URL>",
 	Short: "Serve downloaded extensions to Visual Studio Code",
 	Long: `This command will start a HTTPS server that is compatible with Visual Studio Code.
 When setup you can browse, search and install extensions previously downloaded
@@ -51,18 +53,19 @@ below.
 `,
 	Example: `  $ vsix serve --data _data https://www.example.com/vsix myserver.crt myserver.key
 
-  $ docker run -d -p 8443:8443 \
+  $ docker run -d -p 8443:8080 \
 	-v $(pwd):/data \
-	-v myserver.crt:/myserver.crt:ro \
-	-v myserver.key:/myserver.key:ro \
-	spagettikod/vsix serve /myserver.crt /myserver.key`,
-	Args:                  cobra.MinimumNArgs(3),
+	-v myserver.crt:/server.crt:ro \
+	-v myserver.key:/server.key:ro \
+	spagettikod/vsix serve https://www.example.com/vsix:8443`,
+	// Args:                  cobra.MinimumNArgs(3),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
+		externalURL := EnvOrArg("VSIX_EXTERNAL_URL", args, 0)
 		// setup URLs and server root
-		server, apiRoot, assetRoot, err := parseEndpoints(args[0])
+		server, apiRoot, assetRoot, err := parseEndpoints(externalURL)
 		if err != nil {
-			fmt.Printf("external URL %s is not a valid URL\n", args[0])
+			fmt.Printf("external URL %s is not a valid URL\n", externalURL)
 			os.Exit(1)
 		}
 
@@ -100,11 +103,48 @@ below.
 		log.Info().Msgf("Use this server in Visual Studio Code by setting \"serviceUrl\" in the file product.json to \"%s\"", server+apiRoot[:strings.LastIndex(apiRoot, "/")])
 		log.Debug().Msgf("assets are served from %s", server+assetRoot)
 
-		if err := http.ListenAndServeTLS(serveAddr, args[1], args[2], nil); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+		serveCert = EnvOrFlag("VSIX_CERT_FILE", serveCert)
+		serveKey = EnvOrFlag("VSIX_KEY_FILE", serveKey)
+
+		if serveCert == "" || serveKey == "" {
+			log.Info().
+				Str("cert", serveCert).
+				Str("key", serveKey).
+				Msg("Certificiate and key were not given, starting without TLS")
+			if err := http.ListenAndServe(serveAddr, nil); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
+		} else {
+			log.Info().
+				Str("cert", serveCert).
+				Str("key", serveKey).
+				Msg("Certificiate and key were specified, starting with TLS")
+			if err := http.ListenAndServeTLS(serveAddr, serveCert, serveKey, nil); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+			}
 		}
 	},
+}
+
+func EnvOrFlag(env, flag string) string {
+	if val, found := os.LookupEnv(env); found {
+		return val
+	}
+	return flag
+}
+
+func EnvOrArg(env string, args []string, idx int) string {
+	if val, found := os.LookupEnv(env); found {
+		return val
+	}
+	if idx < len(args) {
+		return args[idx]
+	}
+	fmt.Printf("%s: parameter or flag missing\n", env)
+	os.Exit(1)
+	return ""
 }
 
 func parseEndpoints(externalURL string) (server string, apiRoot string, assetRoot string, err error) {

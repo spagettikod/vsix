@@ -8,8 +8,8 @@ clean:
 	@rm -rf $(OUTPUT)
 
 pkg_docker:
-#	@docker buildx create --use
-#	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
+	@docker buildx create --use
+	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
 
 test:
 	@docker build --target test . && docker rmi `docker image ls --filter label=vsix_intermediate=true -q`

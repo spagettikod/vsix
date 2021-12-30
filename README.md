@@ -66,17 +66,17 @@ given version does not exist.
 #### Examples
 Download the latest version of the golang.Go extension.
 ```bash
-docker run --rm -it -v $(pwd):/data spagettikod/vsix get golang.Go
+$ docker run --rm -it -v $(pwd):/data spagettikod/vsix get golang.Go
 ```
 
 Download version 0.17.0 of the golang.Go extension to the current directory.
 ```
-vsix get golang.Go 0.17.0
+$ vsix get golang.Go 0.17.0
 ```
 
 Download the latest version of the golang.Go extension to the `downloads` directory.
 ```
-vsix get -o downloads golang.Go
+$ vsix get -o downloads golang.Go
 ```
 
 ### `info`
@@ -169,8 +169,8 @@ $ docker run -d \
 List avilable versions for an extension.
 
 ```bash
-docker run --rm -it spagettikod/vsix versions golang.Go
+$ docker run --rm -it spagettikod/vsix versions golang.Go
 ```
 ```
-vsix version golang.Go
+$ vsix version golang.Go
 ```
