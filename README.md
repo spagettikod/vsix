@@ -130,7 +130,7 @@ To enable Visual Studio Code integration you must change the tag serviceUrl in t
 
 #### Example
 ```bash
-$ vsix serve --data _data https://www.example.com/vsix myserver.crt myserver.key
+$ vsix serve --data _data --cert myserver.crt --key myserver.key https://www.example.com/vsix
 ```
 
 ```bash

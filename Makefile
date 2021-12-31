@@ -8,7 +8,7 @@ clean:
 	@rm -rf $(OUTPUT)
 
 pkg_docker:
-	@docker buildx create --use
+# @docker buildx create --use
 	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
 
 test:
