@@ -16,14 +16,14 @@ var (
 		Use:   "vsix",
 		Short: "Visual Studio Code Extension Marketplace command line interface tool.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			if !jsonLog {
+			if !EnvOrFlagBool("VSIX_LOG_JSON", jsonLog) {
 				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 			}
 			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-			if verbose {
+			if EnvOrFlagBool("VSIX_LOG_VERBOSE", verbose) {
 				zerolog.SetGlobalLevel(zerolog.InfoLevel)
 			}
-			if debug {
+			if EnvOrFlagBool("VSIX_LOG_DEBUG", debug) {
 				zerolog.SetGlobalLevel(zerolog.DebugLevel)
 			}
 		},
@@ -44,9 +44,9 @@ var (
 )
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "1", false, "turn on debug logging")
-	rootCmd.PersistentFlags().BoolVarP(&jsonLog, "json", "j", false, "output verbose and debug logs as JSON")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "turn on verbose logging")
+	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "1", false, "turn on debug logging [VSIX_LOG_DEBUG]")
+	rootCmd.PersistentFlags().BoolVarP(&jsonLog, "json", "j", false, "output verbose and debug logs as JSON [VSIX_LOG_JSON]")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "turn on verbose logging [VSIX_LOG_VERBOSE]")
 }
 
 // Execute TODO
@@ -56,4 +56,18 @@ func Execute(version string) {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func EnvOrFlag(env, flag string) string {
+	if val, found := os.LookupEnv(env); found {
+		return val
+	}
+	return flag
+}
+
+func EnvOrFlagBool(env string, flag bool) bool {
+	if _, found := os.LookupEnv(env); found {
+		return true
+	}
+	return flag
 }

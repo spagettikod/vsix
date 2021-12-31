@@ -128,13 +128,6 @@ below.
 	},
 }
 
-func EnvOrFlag(env, flag string) string {
-	if val, found := os.LookupEnv(env); found {
-		return val
-	}
-	return flag
-}
-
 func EnvOrArg(env string, args []string, idx int) string {
 	if val, found := os.LookupEnv(env); found {
 		return val
