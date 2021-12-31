@@ -1,3 +1,5 @@
+# DOCUMENTATION IS NOT UPDATE
+
 # vsix
 vsix is a CLI for Visual Studio Code Extension Marketplace. The tool can be useful to keep an off line stash of extension, for example in an air gapped environment.
 
