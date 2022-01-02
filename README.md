@@ -1,5 +1,3 @@
-# DOCUMENTATION IS NOT UPDATE
-
 # vsix
 vsix is a CLI for Visual Studio Code Extension Marketplace. The tool can be useful to keep an off line stash of extension, for example in an air gapped environment.
 
@@ -27,7 +25,10 @@ docker run --rm -it spagettikod/vsix info golang.Go
 You can bind mount folders to `/data` in the container when syncing extensions.
 
 ```docker
-docker run --rm -it spagettikod/vsix info golang.Go
+docker run --rm -it \
+      -v $(pwd):/data \
+      -v my_extensions_to_sync:/my_extensions_to_sync
+      spagettikod/vsix sync /my_extensions_to_sync
 ```
 
 ### macOS
@@ -140,7 +141,7 @@ $ docker run -d -p 8443:8443 \
       -v $(pwd):/data \
       -v myserver.crt:/myserver.crt:ro \
       -v myserver.key:/myserver.key:ro \
-      spagettikod/vsix serve /myserver.crt /myserver.key
+      spagettikod/vsix serve https://my.vsixserver.net:8443
 ```
 
 ### `sync`
