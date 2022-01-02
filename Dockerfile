@@ -18,3 +18,4 @@ COPY --from=build /vsix/vsix /
 WORKDIR /data
 VOLUME [ "/data", "/server.crt", "/server.key" ]
 ENTRYPOINT [ "/vsix" ]
+CMD [ "serve", "--cert", "/server.crt", "--key", "/server.key" ]
