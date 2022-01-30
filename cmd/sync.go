@@ -1,13 +1,11 @@
 package cmd
 
 import (
-	"errors"
 	"os"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/db"
-	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
 
@@ -59,19 +57,14 @@ output but the execution will not stop.`,
 			extStart := time.Now()
 			success, err := pe.Download(out)
 			if err != nil {
-				if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
-					log.Error().
-						Str("unique_id", pe.UniqueID).
-						Str("version", pe.Version).
-						Str("path", out).
-						Msg(err.Error())
-					loggedErrors++
-				} else {
-					log.Fatal().
-						Err(err).
-						Str("path", out).
-						Msgf("unexpected error occured while syncing %s, exiting", pe)
-				}
+				// if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
+				log.Error().
+					Str("unique_id", pe.UniqueID).
+					Str("version", pe.Version).
+					Str("path", out).
+					Err(err).
+					Msg("unexpected error occured while syncing")
+				loggedErrors++
 			}
 			if success {
 				downloads++
@@ -79,15 +72,15 @@ output but the execution will not stop.`,
 			log.Debug().
 				Str("unique_id", pe.UniqueID).
 				Str("version", pe.Version).
+				Str("path", out).
 				Msgf("sync took %.3fs", time.Since(extStart).Seconds())
 		}
-		log.Info().Msgf("total time for sync %.3fs", time.Since(start).Seconds())
+		log.Info().
+			Str("path", out).
+			Int("downloads", downloads).
+			Int("download_errors", loggedErrors).
+			Msgf("total time for sync %.3fs", time.Since(start).Seconds())
 		if downloads > 0 {
-			log.Debug().
-				Str("path", out).
-				Int("downloads", downloads).
-				Int("download_errors", loggedErrors).
-				Msgf("notifying database that extension were downloaded")
 			err = db.Modified(out)
 			if err != nil {
 				log.Fatal().
