@@ -1,4 +1,4 @@
-VERSION=1.0.1
+VERSION=1.0.2
 OUTPUT=_pkg
 .PHONY: build_linux build_macos build_macos_intel pkg_linux pkg_macos pkg_macos_intel all default clean setup docker test
 
@@ -6,6 +6,9 @@ default: all
 
 clean:
 	@rm -rf $(OUTPUT)
+
+pkg_docker_dev:
+	@docker buildx build --push --platform=linux/amd64 -t registry.spagettikod.se:8443/vsix:$(VERSION)-dev --build-arg VERSION=$(VERSION) .
 
 pkg_docker:
 # @docker buildx create --use

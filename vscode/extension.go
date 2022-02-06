@@ -31,20 +31,20 @@ type extensionQueryResponse struct {
 }
 
 type Extension struct {
-	Categorties      []string    `json:"categories"`
-	DeploymentType   int         `json:"deploymentType"`
-	DisplayName      string      `json:"displayName"`
-	ID               string      `json:"extensionID"`
+	Publisher        Publisher   `json:"publisher"`
+	ID               string      `json:"extensionId"`
 	Name             string      `json:"extensionName"`
+	DisplayName      string      `json:"displayName"`
 	Flags            string      `json:"flags"`
 	LastUpdated      time.Time   `json:"lastUpdated"`
 	PublishedDate    time.Time   `json:"publishedDate"`
-	Publisher        Publisher   `json:"publisher"`
 	ReleaseDate      time.Time   `json:"releaseDate"`
 	ShortDescription string      `json:"shortDescription"`
-	Statistics       []Statistic `json:"statistics"`
-	Tags             []string    `json:"tags"`
 	Versions         []Version   `json:"versions,omitempty"`
+	Categories       []string    `json:"categories"`
+	Tags             []string    `json:"tags"`
+	Statistics       []Statistic `json:"statistics"`
+	DeploymentType   int         `json:"deploymentType"`
 	Path             string      `json:"-"`
 }
 

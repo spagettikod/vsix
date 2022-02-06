@@ -239,7 +239,7 @@ func (db *DB) load() error {
 			versionRoot := ext.AbsVersionDir(absRoot, version.Version)
 			log.Debug().Str("path", versionRoot).Msg("loading version")
 			version.Path = versionRoot
-			version.AssetURI = db.assetEndpoint + ext.Publisher.Name + "/" + ext.Name + "/" + version.Version
+			version.AssetURI = db.assetEndpoint + ext.AbsVersionDir("", version.Version)
 			version.FallbackAssetURI = version.AssetURI
 			version.Files = db.versionAssets(versionRoot)
 			ext.Versions = append(ext.Versions, version)

@@ -15,7 +15,6 @@ RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -ldflags="-extldfla
 FROM scratch AS package
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /vsix/vsix /
-WORKDIR /data
 VOLUME [ "/data", "/server.crt", "/server.key" ]
 ENTRYPOINT [ "/vsix" ]
-CMD [ "serve", "--cert", "/server.crt", "--key", "/server.key" ]
+CMD [ "serve", "--data", "/data", "--cert", "/server.crt", "--key", "/server.key" ]

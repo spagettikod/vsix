@@ -81,6 +81,11 @@ output but the execution will not stop.`,
 			Int("download_errors", loggedErrors).
 			Msgf("total time for sync %.3fs", time.Since(start).Seconds())
 		if downloads > 0 {
+			log.Debug().
+				Str("path", out).
+				Int("downloads", downloads).
+				Int("download_errors", loggedErrors).
+				Msg("notifying database")
 			err = db.Modified(out)
 			if err != nil {
 				log.Fatal().

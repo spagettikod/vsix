@@ -13,13 +13,13 @@ const (
 )
 
 type Version struct {
-	AssetURI         string     `json:"assetUri"`
-	FallbackAssetURI string     `json:"fallbackAssetUri"`
-	Files            []Asset    `json:"files"`
+	Version          string     `json:"version"`
 	Flags            string     `json:"flags"`
 	LastUpdated      time.Time  `json:"lastUpdated"`
+	Files            []Asset    `json:"files"`
 	Properties       []Property `json:"properties"`
-	Version          string     `json:"version"`
+	AssetURI         string     `json:"assetUri"`
+	FallbackAssetURI string     `json:"fallbackAssetUri"`
 	Path             string     `json:"-"`
 }
 

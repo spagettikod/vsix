@@ -234,6 +234,11 @@ func queryHandler(db *db.DB) http.Handler {
 
 				// debug print requested query
 				if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
+					headers := ""
+					for k, v := range r.Header {
+						headers = fmt.Sprintf("%s%s: %v\n", headers, k, strings.Join(v, ","))
+					}
+					hlog.FromRequest(r).Debug().Msg(headers)
 					b, err := json.MarshalIndent(query, "", "  ")
 					if err != nil {
 						log.Error().Err(err).Msg("error while logging request query")
@@ -269,6 +274,24 @@ func queryHandler(db *db.DB) http.Handler {
 					serverError(w, r, fmt.Errorf("error while marshaling results: %v", err))
 					return
 				}
+
+				// w.Header().Set("cache-control", "no-cache, no-store, must-revalidate")
+				// w.Header().Set("content-type", "application/json; charset=utf-8")
+				// w.Header().Set("request-context", "appId=cid-v1:8314cee3-137b-4671-85f0-0ebbe0d65ec2")
+				// w.Header().Set("access-control-allow-origin", "*")
+				// w.Header().Set("access-control-max-age", "3600")
+				// w.Header().Set("access-control-allow-methods", "OPTIONS,GET,POST,PATCH,PUT,DELETE")
+				// w.Header().Set("access-control-expose-headers", "ActivityId,Request-Context")
+				// w.Header().Set("strict-transport-security", "max-age=2592000")
+				// w.Header().Set("x-content-type-options", "nosniff")
+				// w.Header().Set("activityid", "9caac648-7cbf-44e7-be1d-addd8b1850d9")
+				// w.Header().Set("x-powered-by", "ASP.NET")
+				// w.Header().Set("region", "CUS")
+				// w.Header().Set("x-cache", "CONFIG_NOCACHE")
+				// w.Header().Set("x-geo", "VSCodeSearchQueryGlobal_ExtensionQuery")
+				// w.Header().Set("x-msedge-ref", "Ref A: 6DD684E9EE864289ACDEE17AF4D25F7E Ref B: CPH30EDGE0921 Ref C: 2022-02-05T15:02:08Z")
+				// w.Header().Set("date", "Sat, 05 Feb 2022 15:02:08 GMT")
+
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				hlog.FromRequest(r).Debug().Msg("sending response")
 				if _, err = io.Copy(w, bytes.NewBuffer(b)); err != nil {
