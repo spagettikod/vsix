@@ -8,7 +8,7 @@ clean:
 	@rm -rf $(OUTPUT)
 
 pkg_docker_dev:
-	@docker buildx build --push --platform=linux/amd64 -t registry.spagettikod.se:8443/vsix:$(VERSION)-dev --build-arg VERSION=$(VERSION) .
+	@docker buildx build --push --platform=linux/amd64 -t registry.spagettikod.se:8443/vsix:v$(VERSION)-dev --build-arg VERSION=$(VERSION) .
 
 pkg_docker:
 # @docker buildx create --use
