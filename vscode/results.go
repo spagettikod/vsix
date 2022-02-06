@@ -8,7 +8,7 @@ type Results struct {
 
 type Result struct {
 	Extensions     []Extension      `json:"extensions"`
-	PagingToken    string           `json:"pagingToken"`
+	PagingToken    interface{}      `json:"pagingToken"`
 	ResultMetadata []ResultMetadata `json:"resultMetadata"`
 }
 

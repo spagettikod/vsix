@@ -154,6 +154,25 @@ func (db *DB) FindByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vsco
 	return result
 }
 
+func (db *DB) FindByExtensionID(keepLatestVersion bool, ids ...string) []vscode.Extension {
+	queryMap := map[string]bool{}
+
+	for _, id := range ids {
+		queryMap[id] = true
+	}
+
+	result := []vscode.Extension{}
+	for _, i := range db.items {
+		if queryMap[i.ID] {
+			if keepLatestVersion {
+				i = i.KeepVersions(i.LatestVersion())
+			}
+			result = append(result, i)
+		}
+	}
+	return result
+}
+
 func multiContains(s string, substrs ...string) bool {
 	for _, substr := range substrs {
 		if strings.Contains(s, substr) {
@@ -323,6 +342,9 @@ func listAssets(versionRoot string) []string {
 	matches, _ := fs.Glob(os.DirFS(versionRoot), "*")
 	files := []string{}
 	for _, m := range matches {
+		if m == "_vsix_db_version_metadata.json" {
+			continue
+		}
 		log.Debug().Str("path", versionRoot).Str("asset", m).Msg("found asset")
 		files = append(files, path.Join(versionRoot, m))
 	}
