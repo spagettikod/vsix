@@ -3,7 +3,6 @@ package db
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/fs"
 	"io/ioutil"
 	"os"
@@ -246,14 +245,10 @@ func (db *DB) load() error {
 		log.Debug().Str("path", extensionRoot).Msg("loading extension")
 		ext, err := loadExtension(extensionRoot)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading extension, skipping")
+			continue
 		}
-		versions, err := listVersions(extensionRoot)
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
+		versions := listVersions(extensionRoot)
 		for _, version := range versions {
 			versionRoot := ext.AbsVersionDir(absRoot, version.Version)
 			log.Debug().Str("path", versionRoot).Msg("loading version")
@@ -286,7 +281,7 @@ func listExtensions(root string) []string {
 	return files
 }
 
-func listVersions(extensionRoot string) ([]vscode.Version, error) {
+func listVersions(extensionRoot string) []vscode.Version {
 	log.Debug().Str("path", extensionRoot).Msg("list extension versions")
 	matches, _ := fs.Glob(os.DirFS(extensionRoot), "*")
 	versions := []vscode.Version{}
@@ -294,31 +289,27 @@ func listVersions(extensionRoot string) ([]vscode.Version, error) {
 		versionRoot := path.Join(extensionRoot, m)
 		fi, err := os.Stat(versionRoot)
 		if err != nil {
-			return versions, err
+			log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading version, skipping")
+			continue
 		}
 		if fi.IsDir() {
 			log.Debug().Str("path", vscode.AbsVersionMetadataFile(versionRoot)).Str("file", m).Msg("found version candidate")
 			v := vscode.Version{}
 			b, err := ioutil.ReadFile(vscode.AbsVersionMetadataFile(versionRoot))
 			if err != nil {
-				return versions, err
+				log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading version, skipping")
+				continue
 			}
 			if err := json.Unmarshal(b, &v); err != nil {
-				return versions, err
+				log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading version, skipping")
+				continue
 			}
 			versions = append(versions, v)
 		} else {
 			log.Debug().Str("file", m).Msg("not a directory, skipping")
 		}
-		// FIXME remove
-		// if !strings.Contains(m, "metadata.json") {
-		// 	debug.Printf("found metadata.json\n")
-		// 	files = append(files, path.Join(extensionRoot, m))
-		// } else {
-		// 	debug.Printf("could not find metadata.json, probably not version directory, skipping\n")
-		// }
 	}
-	return versions, nil
+	return versions
 }
 
 func loadExtension(extensionRoot string) (vscode.Extension, error) {
