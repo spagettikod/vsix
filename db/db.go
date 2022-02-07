@@ -33,6 +33,7 @@ type DB struct {
 	loadDuration  time.Duration
 	loadedAt      time.Time
 	modFile       string
+	watcher       *fsnotify.Watcher
 }
 
 type DBStats struct {
@@ -69,45 +70,77 @@ func New(root, assetEndpoint string) (*DB, error) {
 	return db, err
 }
 
-func (db *DB) autoreload() error {
-	w, err := fsnotify.NewWatcher()
+func (db *DB) autoreload() (err error) {
+	log.Debug().
+		Str("path", db.Root).
+		Str("modfile", db.modFile).
+		Msg("checking if modfile exists")
+	_, err = os.Stat(db.modFile)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Debug().
+				Str("path", db.Root).
+				Str("modfile", db.modFile).
+				Msg("modfile not found, creating one")
+			err = Modified(db.Root)
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	}
+	log.Debug().
+		Str("path", db.Root).
+		Str("modfile", db.modFile).
+		Msg("adding watcher to modfile")
+	db.watcher, err = fsnotify.NewWatcher()
 	if err != nil {
 		return err
 	}
-	w.Add(db.modFile)
+	db.watcher.Add(db.modFile)
 	go func() {
 		for {
-			<-w.Events
+			<-db.watcher.Events
 			log.Debug().
 				Str("path", db.Root).
+				Str("modfile", db.modFile).
 				Msg("database has been modified, reloading")
 			err := db.Reload()
 			if err != nil {
 				log.Fatal().
 					Err(err).
 					Str("path", db.Root).
+					Str("modfile", db.modFile).
 					Msg("error while reloading database, exiting")
 			}
 		}
 	}()
 	go func() {
-		err := <-w.Errors
-		log.Fatal().
+		err := <-db.watcher.Errors
+		log.Error().
 			Err(err).
 			Str("path", db.Root).
+			Str("modfile", db.modFile).
 			Msg("error occured while monitoring .modfile, exiting")
 	}()
 	return nil
 }
 
 func (db *DB) Reload() error {
-	ndb, err := New(db.Root, db.assetEndpoint)
+	db.items = []vscode.Extension{}
+	err := db.load()
 	if err != nil {
 		return err
 	}
-	db.items = ndb.items
-	db.loadDuration = ndb.loadDuration
-	db.loadedAt = ndb.loadedAt
+
+	if db.Empty() {
+		log.Info().Str("path", db.Root).Msgf("could not find any extensions")
+	} else {
+		stats := db.Stats()
+		log.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
+	}
+
 	return nil
 }
 
