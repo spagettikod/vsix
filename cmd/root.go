@@ -52,6 +52,7 @@ func init() {
 // Execute TODO
 func Execute(version string) {
 	rootCmd.Version = version
+	log.Logger = log.With().Str("version", rootCmd.Version).Logger()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
