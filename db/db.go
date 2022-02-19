@@ -102,7 +102,7 @@ func (db *DB) autoreload() (err error) {
 	go func() {
 		for {
 			<-db.watcher.Events
-			log.Debug().
+			log.Info().
 				Str("path", db.Root).
 				Str("modfile", db.modFile).
 				Msg("database has been modified, reloading")
