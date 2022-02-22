@@ -30,6 +30,10 @@ func (v Version) ID() string {
 	return path.Base(v.AssetURI)
 }
 
+func (v Version) Equals(comp Version) bool {
+	return (v.Version == comp.Version) && (v.ID() == comp.ID())
+}
+
 func (v Version) String() string {
 	b, err := json.MarshalIndent(v, "", "   ")
 	if err != nil {

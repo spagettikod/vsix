@@ -216,11 +216,12 @@ func (e Extension) LatestVersion() string {
 	return e.Versions[0].Version
 }
 
-func (e Extension) Version(version string) (Version, bool) {
+func (e Extension) Version(version string) ([]Version, bool) {
+	versions := []Version{}
 	for _, v := range e.Versions {
 		if v.Version == version {
-			return v, true
+			versions = append(versions, v)
 		}
 	}
-	return Version{}, false
+	return versions, len(versions) > 0
 }
