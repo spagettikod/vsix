@@ -53,9 +53,13 @@ output but the execution will not stop.`,
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
 		loggedErrors := 0
 		downloads := 0
+		d, err := db.Open(out)
+		if err != nil {
+			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
+		}
 		for _, pe := range extensions {
 			extStart := time.Now()
-			success, err := pe.Download(out)
+			success, err := pe.Download(d)
 			if err != nil {
 				// if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
 				log.Error().
@@ -86,7 +90,7 @@ output but the execution will not stop.`,
 				Int("downloads", downloads).
 				Int("download_errors", loggedErrors).
 				Msg("notifying database")
-			err = db.Modified(out)
+			err = d.Modified()
 			if err != nil {
 				log.Fatal().
 					Err(err).

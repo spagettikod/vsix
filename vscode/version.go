@@ -2,14 +2,7 @@ package vscode
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"os"
-	"path"
 	"time"
-)
-
-const (
-	versionMetadataFileName = "_vsix_db_version_metadata.json"
 )
 
 type Version struct {
@@ -28,14 +21,10 @@ type Property struct {
 	Value string `json:"value"`
 }
 
-func AbsVersionMetadataFile(versionRoot string) string {
-	return path.Join(versionRoot, versionMetadataFileName)
-}
-
-func (v Version) SaveMetadata(versionRoot string) error {
-	j, err := json.MarshalIndent(v, "", "   ")
+func (v Version) String() string {
+	b, err := json.MarshalIndent(v, "", "   ")
 	if err != nil {
-		return err
+		return "! JSON UNMARSHAL FAILED !"
 	}
-	return ioutil.WriteFile(AbsVersionMetadataFile(versionRoot), j, os.ModePerm)
+	return string(b)
 }

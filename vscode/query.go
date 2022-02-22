@@ -10,8 +10,8 @@ type QueryResults struct {
 		ResultMetadata []struct {
 			MetadataType  string `json:"metadataType"`
 			MetadataItems []struct {
-				Name  string `json:"name`
-				Count int    `json:"count`
+				Name  string `json:"name"`
+				Count int    `json:"count"`
 			} `json:"metadataItems"`
 		} `json:"resultMetadata"`
 	} `json:"results"`
@@ -110,7 +110,7 @@ func NewQuery() Query {
 	return q
 }
 
-func latestQueryJSON(uniqueID string) string {
+func LatestQueryJSON(uniqueID string) string {
 	q := NewQuery()
 	q.AddCriteria(Criteria{
 		FilterType: FilterTypeExtensionName,
