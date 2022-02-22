@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 	"golang.org/x/mod/semver"
@@ -27,13 +28,14 @@ var (
 )
 
 type DB struct {
-	Root          string
+	root          string
 	items         []vscode.Extension
 	assetEndpoint string
 	loadDuration  time.Duration
 	loadedAt      time.Time
 	modFile       string
 	watcher       *fsnotify.Watcher
+	dblog         zerolog.Logger
 }
 
 type DBStats struct {
@@ -44,45 +46,59 @@ type DBStats struct {
 }
 
 func New(root, assetEndpoint string) (*DB, error) {
-	db := &DB{
-		Root:          root,
-		items:         []vscode.Extension{},
-		assetEndpoint: assetEndpoint,
-		modFile:       path.Join(root, modFilename),
-	}
-	err := db.load()
+	db, err := Open(root)
 	if err != nil {
 		return nil, err
 	}
 
+	db.assetEndpoint = assetEndpoint
+
 	err = db.autoreload()
+	return db, err
+}
+
+func Open(root string) (*DB, error) {
+	absRoot, err := filepath.Abs(root)
 	if err != nil {
+		return nil, err
+	}
+	dblog := log.With().Str("component", "database").Str("db", absRoot).Logger()
+	db := &DB{
+		root:    absRoot,
+		items:   []vscode.Extension{},
+		modFile: path.Join(root, modFilename),
+		dblog:   dblog,
+	}
+	if err := db.load(); err != nil {
 		return nil, err
 	}
 
 	if db.Empty() {
-		log.Info().Msgf("could not find any extensions at %v", root)
+		db.dblog.Info().Msgf("could not find any extensions at %v", root)
 	} else {
 		stats := db.Stats()
-		log.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
+		db.dblog.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
 	}
 
 	return db, err
 }
 
+// TODO remove later? only called from serve command
+func (db *DB) Root() string {
+	return db.root
+}
+
 func (db *DB) autoreload() (err error) {
-	log.Debug().
-		Str("path", db.Root).
+	db.dblog.Debug().
 		Str("modfile", db.modFile).
 		Msg("checking if modfile exists")
 	_, err = os.Stat(db.modFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			log.Debug().
-				Str("path", db.Root).
+			db.dblog.Debug().
 				Str("modfile", db.modFile).
 				Msg("modfile not found, creating one")
-			err = Modified(db.Root)
+			err = db.Modified()
 			if err != nil {
 				return err
 			}
@@ -90,8 +106,7 @@ func (db *DB) autoreload() (err error) {
 			return err
 		}
 	}
-	log.Debug().
-		Str("path", db.Root).
+	db.dblog.Debug().
 		Str("modfile", db.modFile).
 		Msg("adding watcher to modfile")
 	db.watcher, err = fsnotify.NewWatcher()
@@ -102,15 +117,13 @@ func (db *DB) autoreload() (err error) {
 	go func() {
 		for {
 			<-db.watcher.Events
-			log.Info().
-				Str("path", db.Root).
+			db.dblog.Info().
 				Str("modfile", db.modFile).
 				Msg("database has been modified, reloading")
 			err := db.Reload()
 			if err != nil {
-				log.Fatal().
+				db.dblog.Fatal().
 					Err(err).
-					Str("path", db.Root).
 					Str("modfile", db.modFile).
 					Msg("error while reloading database, exiting")
 			}
@@ -118,9 +131,8 @@ func (db *DB) autoreload() (err error) {
 	}()
 	go func() {
 		err := <-db.watcher.Errors
-		log.Error().
+		db.dblog.Error().
 			Err(err).
-			Str("path", db.Root).
 			Str("modfile", db.modFile).
 			Msg("error occured while monitoring .modfile, exiting")
 	}()
@@ -135,34 +147,91 @@ func (db *DB) Reload() error {
 	}
 
 	if db.Empty() {
-		log.Info().Str("path", db.Root).Msgf("could not find any extensions")
+		db.dblog.Info().Msgf("could not find any extensions")
 	} else {
 		stats := db.Stats()
-		log.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
+		db.dblog.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
 	}
 
 	return nil
 }
 
 // Modified notifies the database at path p that its content has been updated.
-func Modified(p string) error {
-	f, err := os.Create(path.Join(p, modFilename))
+func (db *DB) Modified() error {
+	f, err := os.Create(path.Join(db.root, modFilename))
 	if err != nil {
 		return err
 	}
 	return f.Close()
 }
 
-// Inconsistent returns true if the database in memory is inconsistent with files on disk.
-// Currently it only checks if version folders have been modified since the last database load.
-func (db *DB) Inconsistent() (bool, error) {
-	log.Debug().Str("path", db.modFile).Msg("checking modfile to see if database has been updated")
-	fi, err := os.Stat(db.modFile)
+func (db *DB) saveExtensionMetadata(e vscode.Extension) error {
+	// save extension metadata
+	// re-run query to populate statistics, list versions query does not populate statistics, is there another way?
+	eqr, err := vscode.RunQuery(vscode.LatestQueryJSON(e.UniqueID()))
 	if err != nil {
-		return false, err
+		return err
 	}
-	log.Debug().Str("path", db.modFile).Msgf("is modfile updated? %v", db.loadedAt.Before(fi.ModTime()))
-	return db.loadedAt.Before(fi.ModTime()), nil
+	newExt := eqr.Results[0].Extensions[0]
+	newExt.Versions = []vscode.Version{}
+	if err := os.MkdirAll(ExtensionDir(db.root, newExt), os.ModePerm); err != nil {
+		return err
+	}
+	return ioutil.WriteFile(ExtensionMetaFile(db.root, newExt), []byte(newExt.String()), os.ModePerm)
+}
+
+func (db *DB) saveVersionMetadata(e vscode.Extension, v vscode.Version) error {
+	// for _, v := range e.Versions {
+	if err := os.MkdirAll(VersionDir(db.root, e, v), os.ModePerm); err != nil {
+		return err
+	}
+	if err := ioutil.WriteFile(VersionMetaFile(db.root, e, v), []byte(v.String()), os.ModePerm); err != nil {
+		return err
+	}
+	// }
+	return nil
+}
+
+func (db *DB) Save(e vscode.Extension) error {
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("dir", db.root).Logger()
+	elog.Debug().Msg("saving extension metadata file")
+	if err := db.saveExtensionMetadata(e); err != nil {
+		return err
+	}
+	elog.Debug().Msg("saving version metadata file")
+
+	v, _ := e.Version(e.LatestVersion())
+	if err := db.saveVersionMetadata(e, v); err != nil {
+		return err
+	}
+
+	for _, v := range e.Versions {
+		for _, a := range v.Files {
+			filename := AssetFile(db.root, e, v, a)
+			elog.Info().Str("source", a.Source).Str("destination", filename).Msg("downloading")
+			if err := a.Download(filename); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// VersionExists returns true if the given extension and version can be found. It
+// returns false if the extension can not be found.
+func (db *DB) VersionExists(uniqueID, version string) bool {
+	exts := db.FindByUniqueID(false, uniqueID)
+	// if the extensions could not be would the version does not exist
+	if len(exts) == 0 {
+		return false
+	}
+	for _, v := range exts[0].Versions {
+		if v.Version == version {
+			return true
+		}
+	}
+	return false
 }
 
 // FindByUniqueID returns an array of extensions matching a list of uniqueID's. If keepLatestVersion is true only the latest
@@ -268,25 +337,21 @@ func (db *DB) sortVersions() {
 
 func (db *DB) load() error {
 	start := time.Now()
-	absRoot, err := filepath.Abs(db.Root)
-	if err != nil {
-		return err
-	}
-	log.Debug().Str("path", absRoot).Msg("loading database with extensions")
+	db.dblog.Debug().Msg("loading database")
 	exts := []vscode.Extension{}
-	for _, extensionRoot := range listExtensions(absRoot) {
-		log.Debug().Str("path", extensionRoot).Msg("loading extension")
-		ext, err := loadExtension(extensionRoot)
+	for _, extensionRoot := range db.listExtensions() {
+		db.dblog.Debug().Str("path", extensionRoot).Msg("loading extension")
+		ext, err := db.loadExtension(extensionRoot)
 		if err != nil {
-			log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading extension, skipping")
+			db.dblog.Error().Err(err).Str("path", extensionRoot).Msg("error while loading extension, skipping")
 			continue
 		}
-		versions := listVersions(extensionRoot)
+		versions := db.listVersions(ext)
 		for _, version := range versions {
-			versionRoot := ext.AbsVersionDir(absRoot, version.Version)
-			log.Debug().Str("path", versionRoot).Msg("loading version")
+			versionRoot := VersionDir(db.root, ext, version)
+			db.dblog.Debug().Str("path", versionRoot).Msg("loading version")
 			version.Path = versionRoot
-			version.AssetURI = db.assetEndpoint + ext.AbsVersionDir("", version.Version)
+			version.AssetURI = db.assetEndpoint + VersionDir("", ext, version)
 			version.FallbackAssetURI = version.AssetURI
 			version.Files = db.versionAssets(versionRoot)
 			ext.Versions = append(ext.Versions, version)
@@ -298,56 +363,58 @@ func (db *DB) load() error {
 
 	db.loadDuration = time.Since(start)
 	db.loadedAt = time.Now()
-	log.Debug().Msgf("loading database took %.3fs", db.loadDuration.Seconds())
+	db.dblog.Debug().Msgf("loading database took %.3fs", db.loadDuration.Seconds())
 	return nil
 }
 
 // listExtensions returns a list of paths to extension in directory root. Valid extensions have a file named metadata.json at <root>/extensions/*/*/metadata.json.
-func listExtensions(root string) []string {
-	log.Debug().Str("path", root).Msg("searching for extension")
-	matches, _ := fs.Glob(os.DirFS(root), "*/*")
+func (db *DB) listExtensions() []string {
+	db.dblog.Debug().Msg("searching for extensions")
+	matches, _ := fs.Glob(os.DirFS(db.root), "*/*")
 	files := []string{}
 	for _, m := range matches {
-		log.Debug().Str("path", m).Msg("found extension candidate")
-		files = append(files, path.Join(root, m))
+		p := path.Join(db.root, m)
+		db.dblog.Debug().Str("path", p).Msg("found extension candidate")
+		files = append(files, p)
 	}
 	return files
 }
 
-func listVersions(extensionRoot string) []vscode.Version {
-	log.Debug().Str("path", extensionRoot).Msg("list extension versions")
-	matches, _ := fs.Glob(os.DirFS(extensionRoot), "*")
+func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
+	db.dblog.Debug().Str("path", ext.Path).Msg("list extension versions")
+	matches, _ := fs.Glob(os.DirFS(ext.Path), "*")
 	versions := []vscode.Version{}
 	for _, m := range matches {
-		versionRoot := path.Join(extensionRoot, m)
+		versionRoot := path.Join(ext.Path, m)
 		fi, err := os.Stat(versionRoot)
 		if err != nil {
-			log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading version, skipping")
+			db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
 			continue
 		}
 		if fi.IsDir() {
-			log.Debug().Str("path", vscode.AbsVersionMetadataFile(versionRoot)).Str("file", m).Msg("found version candidate")
+			metafile := path.Join(versionRoot, versionMetadataFileName)
+			db.dblog.Debug().Str("path", metafile).Str("file", m).Msg("found version candidate")
 			v := vscode.Version{}
-			b, err := ioutil.ReadFile(vscode.AbsVersionMetadataFile(versionRoot))
+			b, err := ioutil.ReadFile(metafile)
 			if err != nil {
-				log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading version, skipping")
+				db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
 				continue
 			}
 			if err := json.Unmarshal(b, &v); err != nil {
-				log.Error().Err(err).Str("path", extensionRoot).Msg("error while loading version, skipping")
+				db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
 				continue
 			}
 			versions = append(versions, v)
 		} else {
-			log.Debug().Str("file", m).Msg("not a directory, skipping")
+			db.dblog.Debug().Str("file", m).Msg("not a directory, skipping")
 		}
 	}
 	return versions
 }
 
-func loadExtension(extensionRoot string) (vscode.Extension, error) {
-	metaFile := path.Join(extensionRoot, vscode.ExtensionMetadataFileName)
-	log.Debug().Str("path", metaFile).Msg("loading metadata")
+func (db *DB) loadExtension(extensionRoot string) (vscode.Extension, error) {
+	metaFile := path.Join(extensionRoot, extensionMetadataFileName)
+	db.dblog.Debug().Str("path", metaFile).Msg("loading metadata")
 	b, err := ioutil.ReadFile(metaFile)
 	if err != nil {
 		return vscode.Extension{}, err
@@ -361,15 +428,15 @@ func loadExtension(extensionRoot string) (vscode.Extension, error) {
 	return ext, err
 }
 
-func listAssets(versionRoot string) []string {
-	log.Debug().Str("path", versionRoot).Msg("looking for version assets")
+func (db *DB) listAssets(versionRoot string) []string {
+	db.dblog.Debug().Str("path", versionRoot).Msg("looking for version assets")
 	matches, _ := fs.Glob(os.DirFS(versionRoot), "*")
 	files := []string{}
 	for _, m := range matches {
 		if m == "_vsix_db_version_metadata.json" {
 			continue
 		}
-		log.Debug().Str("path", versionRoot).Str("asset", m).Msg("found asset")
+		db.dblog.Debug().Str("path", versionRoot).Str("asset", m).Msg("found asset")
 		files = append(files, path.Join(versionRoot, m))
 	}
 	return files
@@ -377,9 +444,12 @@ func listAssets(versionRoot string) []string {
 
 func (db *DB) versionAssets(versionRoot string) []vscode.Asset {
 	assets := []vscode.Asset{}
-	for _, a := range listAssets(versionRoot) {
+	for _, a := range db.listAssets(versionRoot) {
 		pathelements := strings.Split(filepath.Dir(a), "/")
-		log.Debug().Str("path", versionRoot).Str("asset", a).Msg("adding asset to extension")
+		db.dblog.Debug().
+			Str("path", versionRoot).
+			Str("asset", a).
+			Str("asset_type", string(vscode.AssetTypeKey(filepath.Base(a)))).Msg("adding asset to extension")
 		asset := vscode.Asset{
 			Type:   vscode.AssetTypeKey(filepath.Base(a)),
 			Source: db.assetEndpoint + path.Join(pathelements[len(pathelements)-3], pathelements[len(pathelements)-2], pathelements[len(pathelements)-1], filepath.Base(a)),

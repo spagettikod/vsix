@@ -177,7 +177,7 @@ func assetHandler(db *db.DB) http.Handler {
 			// assemble filename from request URL
 			pathParts := strings.Split(r.URL.Path, "/")
 			// FIXME this panics if the requested path does not follow the expected layout
-			filename := path.Join(db.Root, pathParts[len(pathParts)-4], pathParts[len(pathParts)-3], pathParts[len(pathParts)-2], pathParts[len(pathParts)-1])
+			filename := path.Join(db.Root(), pathParts[len(pathParts)-4], pathParts[len(pathParts)-3], pathParts[len(pathParts)-2], pathParts[len(pathParts)-1])
 
 			// set content type top json if returned file is a manifest
 			if strings.Contains(filename, "Manifest") {

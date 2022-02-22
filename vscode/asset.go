@@ -2,7 +2,7 @@ package vscode
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 )
@@ -57,28 +57,16 @@ func (a Asset) Is(t AssetTypeKey) bool {
 	return a.Type == t
 }
 
-// Abs returns the local file path by parsing the extension URL and adding the local path p.
-// func (a Asset) Abs(p string) string {
-// 	u, err := url.Parse(a.Source)
-// 	if err != nil {
-// 		return ""
-// 	}
-
-// 	// remote path has the format https://golang.gallerycdn.vsassets.io/extensions/golang/go/0.26.0/1623958451720/Microsoft.VisualStudio.Code.Manifest
-// 	// we want to remove the extensions part for local storage. This makes it easier to find the extensions later when serving them.
-// 	localPath := u.Path[len("/extensions"):]
-
-// 	return path.Join(p, localPath)
-// }
-
-func (a Asset) Download(filename string) error {
+func (a Asset) Download(destFilename string) error {
 	resp, err := http.Get(a.Source)
 	if err != nil {
 		return err
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	f, err := os.Create(destFilename)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, b, os.ModePerm)
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
 }

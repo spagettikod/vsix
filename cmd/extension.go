@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spagettikod/vsix/db"
 	"github.com/spagettikod/vsix/vscode"
 )
 
@@ -186,82 +187,55 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 }
 
 // Download will fetch the extension all its assets making it ready to be
-// served by the serve command. It returns true if a download occured and
+// served by the serve command. It returns true if download succeeded and
 // false if the requested version already exists at output.
-func (pe ExtensionRequest) Download(root string) (bool, error) {
-	elog := log.With().Str("extension", pe.UniqueID).Str("dir", root).Logger()
-
-	elog.Debug().Msg("checking if output directory exists")
-	if exists, err := outDirExists(root); !exists {
-		return false, err
-	}
+func (extReq ExtensionRequest) Download(db *db.DB) (bool, error) {
+	elog := log.With().Str("extension", extReq.UniqueID).Logger()
 
 	elog.Debug().Msg("searching for extension at Marketplace")
-	ext, err := vscode.NewExtension(pe.UniqueID)
+	ext, err := vscode.NewExtension(extReq.UniqueID)
 	if err != nil {
 		return false, err
 	}
-	if ext.IsExtensionPack() {
-		elog.Info().Msg("is extension pack, getting pack contents")
-		for _, pack := range ext.ExtensionPack() {
-			erPack := ExtensionRequest{UniqueID: pack}
-			_, err := erPack.Download(root)
-			if err != nil {
-				return false, err
-			}
-		}
-	}
-	if pe.Version == "" {
+
+	// TODO ms-vscode-remote.vscode-remote-extensionpack seems to have a VSIX-file, does this mean
+	// we don't have to download all extensions? If we need to download all extensions how do
+	// we know which version?
+	// if ext.IsExtensionPack() {
+	// 	elog.Info().Msg("is extension pack, getting pack contents")
+	// 	for _, pack := range ext.ExtensionPack() {
+	// 		erPack := ExtensionRequest{UniqueID: pack}
+	// 		_, err := erPack.Download(db)
+	// 		if err != nil {
+	// 			return false, err
+	// 		}
+	// 	}
+	// }
+
+	// set version to the latest since no version was given in the request
+	if extReq.Version == "" {
 		elog.Debug().Msg("version was not specified, setting to latest version")
-		pe.Version = ext.LatestVersion()
+		extReq.Version = ext.LatestVersion()
 	}
-	if _, found := ext.Version(pe.Version); !found {
+	if _, found := ext.Version(extReq.Version); !found {
+		elog.Debug().Str("extension_version", extReq.Version).Msg("requested version was not found at Marketplace")
 		return false, ErrVersionNotFound
 	}
-	elog.Debug().Str("version", pe.Version).Msg("found version")
-	if exists, err := ext.VersionExists(pe.Version, root); exists || err != nil {
-		if exists {
-			elog.Info().Str("version", pe.Version).Msg("skipping download, version already exist at output path")
-			return false, nil
-		}
+	elog.Debug().Str("extension_version", extReq.Version).Msg("found version at Marketplace")
+
+	if db.VersionExists(ext.UniqueID(), extReq.Version) {
+		elog.Info().Str("extension_version", extReq.Version).Msg("skipping download, version already exist at output path")
+		return false, nil
+	}
+
+	// only keep the version from the request
+	ext = ext.KeepVersions(extReq.Version)
+
+	if err := db.Save(ext); err != nil {
 		return false, err
 	}
 
-	// create version directory where files are saved
-	versionDir := ext.AbsVersionDir(root, pe.Version)
-	elog.Debug().Str("destination", versionDir).Msg("checking if version destination already exists")
-	if err := os.MkdirAll(versionDir, os.ModePerm); err != nil {
-		return false, err
-	}
-
-	assets, _ := ext.Assets(pe.Version)
-	for _, asset := range assets {
-		// download setting filename to asset type
-		filename := path.Join(versionDir, string(asset.Type))
-		elog.Info().
-			Str("source", asset.Source).
-			Str("destination", filename).
-			Msg("downloading")
-		if err := asset.Download(filename); err != nil {
-			return false, err
-		}
-	}
-
-	elog.Debug().
-		Str("destination", ext.AbsVersionDir(root, pe.Version)).
-		Msg("saving version metadata")
-	version, found := ext.Version(pe.Version)
-	if !found {
-		return false, fmt.Errorf("error while saving version metadata %w", vscode.ErrVersionNotFound)
-	}
-	if err := version.SaveMetadata(ext.AbsVersionDir(root, pe.Version)); err != nil {
-		return false, err
-	}
-
-	elog.Debug().
-		Str("destination", ext.AbsMetadataFile(root)).
-		Msg("saving extension metadata")
-	return true, ext.SaveMetadata(root)
+	return true, nil
 }
 
 func outDirExists(path string) (bool, error) {

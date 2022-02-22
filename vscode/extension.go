@@ -7,15 +7,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path"
 	"strings"
 	"time"
 )
 
 const (
-	propKeyExtensionPack      = "Microsoft.VisualStudio.Code.ExtensionPack"
-	debugEnvVar               = "VSIX_DEBUG"
-	ExtensionMetadataFileName = "_vsix_db_extension_metadata.json"
+	propKeyExtensionPack = "Microsoft.VisualStudio.Code.ExtensionPack"
+	debugEnvVar          = "VSIX_DEBUG"
 )
 
 var (
@@ -63,7 +61,7 @@ type Statistic struct {
 }
 
 func Search(query string, limit int, sortBy SortCriteria) ([]Extension, error) {
-	eqr, err := runQuery(searchQueryJSON(query, limit, sortBy))
+	eqr, err := RunQuery(searchQueryJSON(query, limit, sortBy))
 	if err != nil {
 		return []Extension{}, err
 	}
@@ -71,12 +69,12 @@ func Search(query string, limit int, sortBy SortCriteria) ([]Extension, error) {
 }
 
 func NewExtension(uniqueID string) (Extension, error) {
-	eqr, err := runQuery(latestQueryJSON(uniqueID))
+	eqr, err := RunQuery(LatestQueryJSON(uniqueID))
 	if err != nil {
 		return Extension{}, err
 	}
 	uuid := eqr.Results[0].Extensions[0].ID
-	eqr, err = runQuery(listVersionsQueryJSON(uuid))
+	eqr, err = RunQuery(listVersionsQueryJSON(uuid))
 	if err != nil {
 		return Extension{}, err
 	}
@@ -105,34 +103,6 @@ func (e Extension) Asset(version string, assetType AssetTypeKey) (Asset, bool) {
 	return Asset{}, false
 }
 
-func (e Extension) AbsDir(root string) string {
-	return path.Join(root, strings.ToLower(e.Publisher.Name), strings.ToLower(e.Name))
-}
-
-// MetaPath return the path to the metadata.json file for this extension. The path does not include the output directory, only the path within the output directory.
-func (e Extension) AbsMetadataFile(root string) string {
-	return path.Join(e.AbsDir(root), ExtensionMetadataFileName)
-}
-
-func (e Extension) AbsVersionDir(root, version string) string {
-	return path.Join(e.AbsDir(root), version)
-}
-
-func (e Extension) SaveMetadata(root string) error {
-	// re-run query to populate statistics, list versions query does not populate statistics, is there another way?
-	eqr, err := runQuery(latestQueryJSON(e.UniqueID()))
-	if err != nil {
-		return err
-	}
-	newExt := eqr.Results[0].Extensions[0]
-	newExt.Versions = []Version{}
-	j, err := json.MarshalIndent(newExt, "", "   ")
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(e.AbsMetadataFile(root), j, os.ModePerm)
-}
-
 func (e Extension) IsExtensionPack() bool {
 	return len(e.ExtensionPack()) > 0
 }
@@ -148,18 +118,6 @@ func (e Extension) ExtensionPack() []string {
 		}
 	}
 	return pack
-}
-
-func (e Extension) VersionExists(version, root string) (bool, error) {
-	dir := e.AbsVersionDir(root, version)
-	_, err := os.Stat(dir)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 func (e Extension) UniqueID() string {
@@ -214,7 +172,7 @@ func (e Extension) String() string {
 	return string(b)
 }
 
-func runQuery(q string) (extensionQueryResponse, error) {
+func RunQuery(q string) (extensionQueryResponse, error) {
 	if _, debug := os.LookupEnv(debugEnvVar); debug {
 		ioutil.WriteFile("query.json", []byte(q), 0644)
 	}
