@@ -22,7 +22,7 @@ func ExtensionDir(root string, e vscode.Extension) string {
 // where root is the root path to the database.
 // For example: /var/mydb/golang/go/0.29.0
 func VersionDir(root string, e vscode.Extension, v vscode.Version) string {
-	return path.Join(ExtensionDir(root, e), v.Version)
+	return path.Join(ExtensionDir(root, e), v.Version, v.ID())
 }
 
 // ExtensionMetaFile return the path to the metadata.json file for this extension.
