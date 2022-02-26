@@ -1,6 +1,8 @@
 package cmd
 
-import "testing"
+import (
+	"testing"
+)
 
 func Test_URLParse(t *testing.T) {
 	type Test struct {
@@ -32,7 +34,17 @@ func Test_URLParse(t *testing.T) {
 		},
 		{
 			ExternalURL:          "http://www.example.com/hepp",
-			ExternalURLIsInvalid: true,
+			ExpectedServer:       "http://www.example.com",
+			ExpectedAPIRoot:      "/hepp/extensionquery",
+			ExpectedAssetRoot:    "/hepp/" + assetURLPath,
+			ExternalURLIsInvalid: false,
+		},
+		{
+			ExternalURL:          "http://localhost:8080",
+			ExpectedServer:       "http://localhost:8080",
+			ExpectedAPIRoot:      "/extensionquery",
+			ExpectedAssetRoot:    "/" + assetURLPath,
+			ExternalURLIsInvalid: false,
 		},
 	}
 

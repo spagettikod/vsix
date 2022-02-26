@@ -74,11 +74,12 @@ below.
 		if len(serveDBRoot) > 0 {
 			root = serveDBRoot
 		}
-		db, err := db.New(root, server+assetRoot)
+		db, err := db.Open(root)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+		db.SetAssetEndpoint(server + assetRoot)
 
 		stack := alice.New(
 			hlog.NewHandler(log.Logger),
@@ -97,11 +98,12 @@ below.
 		)
 
 		// setup and start server
-		http.Handle(assetRoot, stack.Then(assetHandler(db)))
+		http.Handle(assetRoot, stack.Then(assetHandler(db, "/"+assetURLPath)))
 		http.Handle(apiRoot, stack.Then(queryHandler(db)))
 
 		log.Info().Msgf("Use this server in Visual Studio Code by setting \"serviceUrl\" in the file product.json to \"%s\"", server+apiRoot[:strings.LastIndex(apiRoot, "/")])
 		log.Debug().Msgf("assets are served from %s", server+assetRoot)
+		log.Debug().Msgf("API served from %s", server+apiRoot)
 
 		serveCert = EnvOrFlag("VSIX_CERT_FILE", serveCert)
 		serveKey = EnvOrFlag("VSIX_KEY_FILE", serveKey)
@@ -141,8 +143,8 @@ func EnvOrArg(env string, args []string, idx int) string {
 }
 
 func parseEndpoints(externalURL string) (server string, apiRoot string, assetRoot string, err error) {
-	if externalURL[:5] != "https" {
-		err = fmt.Errorf("external URL must use protocol 'https'")
+	if externalURL[:5] != "https" && externalURL[:4] != "http" {
+		err = fmt.Errorf("URL is missing protocol")
 		return
 	}
 	u, err := url.Parse(externalURL)
@@ -165,7 +167,7 @@ func parseEndpoints(externalURL string) (server string, apiRoot string, assetRoo
 	return
 }
 
-func assetHandler(db *db.DB) http.Handler {
+func assetHandler(db *db.DB, assetURLPath string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
@@ -175,19 +177,17 @@ func assetHandler(db *db.DB) http.Handler {
 		case http.MethodGet:
 			hlog.FromRequest(r).Debug().Msgf("extracting filename from path: %s", r.URL.Path)
 			// assemble filename from request URL
-			pathParts := strings.Split(r.URL.Path, "/")
-			// FIXME this panics if the requested path does not follow the expected layout
-			filename := path.Join(db.Root(), pathParts[len(pathParts)-4], pathParts[len(pathParts)-3], pathParts[len(pathParts)-2], pathParts[len(pathParts)-1])
+			filePath := path.Join(db.Root(), r.URL.Path[len(assetURLPath):])
 
-			// set content type top json if returned file is a manifest
-			if strings.Contains(filename, "Manifest") {
-				hlog.FromRequest(r).Debug().Str("path", filename).Msg("requested file is a manifest setting content type to application/json")
+			// set content type top json if returned file path is a manifest
+			if strings.Contains(filePath, "Manifest") {
+				hlog.FromRequest(r).Debug().Str("filePath", filePath).Msg("requested file is a manifest setting content type to application/json")
 				w.Header().Set("Content-Type", "application/json")
 			}
 
 			// open the file from local storage
-			hlog.FromRequest(r).Debug().Str("path", filename).Msg("opening file")
-			file, err := os.Open(filename)
+			hlog.FromRequest(r).Debug().Str("filePath", filePath).Msg("opening file")
+			file, err := os.Open(filePath)
 			if err != nil {
 				serverError(w, r, fmt.Errorf("error opening file: %v", err))
 				return
@@ -198,7 +198,7 @@ func assetHandler(db *db.DB) http.Handler {
 			w.Header().Set("Content-Encoding", "gzip")
 			gw := gzip.NewWriter(w)
 			defer gw.Close()
-			hlog.FromRequest(r).Debug().Str("path", filename).Msg("sending file")
+			hlog.FromRequest(r).Debug().Str("filePath", filePath).Msg("sending file")
 			_, err = io.Copy(gw, file)
 			if err != nil {
 				serverError(w, r, fmt.Errorf("error transmitting file: %v", err))

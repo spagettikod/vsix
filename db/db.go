@@ -45,18 +45,6 @@ type DBStats struct {
 	LoadDuration time.Duration
 }
 
-func New(root, assetEndpoint string) (*DB, error) {
-	db, err := Open(root)
-	if err != nil {
-		return nil, err
-	}
-
-	db.assetEndpoint = assetEndpoint
-
-	err = db.autoreload()
-	return db, err
-}
-
 func Open(root string) (*DB, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
@@ -81,6 +69,16 @@ func Open(root string) (*DB, error) {
 	}
 
 	return db, err
+}
+
+func (db *DB) SetAssetEndpoint(assetEndpoint string) {
+	for _, e := range db.items {
+		for _, v := range e.Versions {
+			for i, f := range v.Files {
+				v.Files[i].Source = assetEndpoint + f.Source
+			}
+		}
+	}
 }
 
 // TODO remove later? only called from serve command
@@ -467,7 +465,7 @@ func (db *DB) versionAssets(versionRoot string) []vscode.Asset {
 			Str("asset_type", string(vscode.AssetTypeKey(filepath.Base(a)))).Msg("adding asset to extension")
 		asset := vscode.Asset{
 			Type:   vscode.AssetTypeKey(filepath.Base(a)),
-			Source: db.assetEndpoint + path.Join(pathelements[len(pathelements)-3], pathelements[len(pathelements)-2], pathelements[len(pathelements)-1], filepath.Base(a)),
+			Source: db.assetEndpoint + path.Join(pathelements[len(pathelements)-4], pathelements[len(pathelements)-3], pathelements[len(pathelements)-2], pathelements[len(pathelements)-1], filepath.Base(a)),
 			Path:   a,
 		}
 		assets = append(assets, asset)

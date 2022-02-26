@@ -24,7 +24,7 @@ another if the database format changed between versions.
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		db, err := db.New(args[0], "")
+		db, err := db.Open(args[0])
 		if err != nil {
 			if err != nil {
 				log.Fatal().Err(err).Str("path", args[0]).Msg("error while opening database")
