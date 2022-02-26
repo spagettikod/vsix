@@ -164,6 +164,11 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 	elog = elog.With().Str("version", pe.Version).Logger()
 
 	elog.Debug().Msg("version has been determined")
+
+	if ext.IsMultiPlatform() {
+		return ErrMultiplatformNotSupported
+	}
+
 	filename := path.Join(root, fmt.Sprintf("%s-%s.vsix", ext.UniqueID(), pe.Version))
 	elog = elog.With().Str("destination", filename).Logger()
 	elog.Debug().Msg("checking if destination already exists")
