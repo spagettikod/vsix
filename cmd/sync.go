@@ -53,7 +53,7 @@ output but the execution will not stop.`,
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
 		loggedErrors := 0
 		downloads := 0
-		d, err := db.Open(out)
+		d, err := db.Open(out, false)
 		if err != nil {
 			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
 		}

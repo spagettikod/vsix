@@ -74,7 +74,7 @@ below.
 		if len(serveDBRoot) > 0 {
 			root = serveDBRoot
 		}
-		db, err := db.Open(root)
+		db, err := db.Open(root, true)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)

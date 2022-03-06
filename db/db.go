@@ -45,7 +45,7 @@ type DBStats struct {
 	LoadDuration time.Duration
 }
 
-func Open(root string) (*DB, error) {
+func Open(root string, autoreload bool) (*DB, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -61,6 +61,13 @@ func Open(root string) (*DB, error) {
 		return nil, err
 	}
 
+	if autoreload {
+		err := db.autoreload()
+		if err != nil {
+			return db, err
+		}
+	}
+
 	if db.Empty() {
 		db.dblog.Info().Msgf("could not find any extensions at %v", root)
 	} else {
@@ -73,9 +80,11 @@ func Open(root string) (*DB, error) {
 
 func (db *DB) SetAssetEndpoint(assetEndpoint string) {
 	for _, e := range db.items {
-		for _, v := range e.Versions {
+		for j, v := range e.Versions {
 			for i, f := range v.Files {
 				v.Files[i].Source = assetEndpoint + f.Source
+				e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
+				e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
 			}
 		}
 	}

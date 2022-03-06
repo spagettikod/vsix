@@ -8,7 +8,7 @@ import (
 
 type Version struct {
 	Version          string     `json:"version"`
-	TargetPlatform   string     `json:"targetPlatform"`
+	TargetPlatform   string     `json:"targetPlatform,omitempty"`
 	Flags            string     `json:"flags"`
 	LastUpdated      time.Time  `json:"lastUpdated"`
 	Files            []Asset    `json:"files"`
