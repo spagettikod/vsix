@@ -28,16 +28,34 @@ var infoCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		s := `Name:           %s
-Publisher:      %s
-Latest version: %s
-Released on:    %s
-Last updated:   %s
-Extension pack: %s
+		s := `Name:             %s
+Publisher:        %s
+Latest version:   %s
+Target platforms: %s
+Released on:      %s
+Last updated:     %s
+Extension pack:   %s
 
 %s
 
 `
-		fmt.Printf(s, ext.Name, ext.Publisher.DisplayName, ext.Versions[0].Version, ext.ReleaseDate.Format("2006-01-02 15:04 UTC"), ext.LastUpdated.Format("2006-01-02 15:04 UTC"), strings.Join(ext.ExtensionPack(), ",\n                "), ext.ShortDescription)
+		version, _ := ext.Version(ext.LatestVersion())
+		targetPlatforms := []string{}
+		if len(version) == 1 && version[0].TargetPlatform == "" {
+			targetPlatforms = []string{"Universal"}
+		} else {
+			for _, v := range version {
+				targetPlatforms = append(targetPlatforms, v.TargetPlatform)
+			}
+		}
+		fmt.Printf(s,
+			ext.Name,
+			ext.Publisher.DisplayName,
+			ext.LatestVersion(),
+			strings.Join(targetPlatforms, "\n                  "),
+			ext.ReleaseDate.Format("2006-01-02 15:04 UTC"),
+			ext.LastUpdated.Format("2006-01-02 15:04 UTC"),
+			strings.Join(ext.ExtensionPack(), "\n                  "),
+			ext.ShortDescription)
 	},
 }

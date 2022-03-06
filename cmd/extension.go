@@ -164,6 +164,11 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 	elog = elog.With().Str("version", pe.Version).Logger()
 
 	elog.Debug().Msg("version has been determined")
+
+	if ext.IsMultiPlatform() {
+		return ErrMultiplatformNotSupported
+	}
+
 	filename := path.Join(root, fmt.Sprintf("%s-%s.vsix", ext.UniqueID(), pe.Version))
 	elog = elog.With().Str("destination", filename).Logger()
 	elog.Debug().Msg("checking if destination already exists")
@@ -190,7 +195,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 // served by the serve command. It returns true if download succeeded and
 // false if the requested version already exists at output.
 func (extReq ExtensionRequest) Download(db *db.DB) (bool, error) {
-	elog := log.With().Str("extension", extReq.UniqueID).Logger()
+	elog := log.With().Str("extension", extReq.UniqueID).Str("extension_version", extReq.Version).Logger()
 
 	elog.Debug().Msg("searching for extension at Marketplace")
 	ext, err := vscode.NewExtension(extReq.UniqueID)
@@ -217,22 +222,27 @@ func (extReq ExtensionRequest) Download(db *db.DB) (bool, error) {
 		elog.Debug().Msg("version was not specified, setting to latest version")
 		extReq.Version = ext.LatestVersion()
 	}
-	if _, found := ext.Version(extReq.Version); !found {
-		elog.Debug().Str("extension_version", extReq.Version).Msg("requested version was not found at Marketplace")
-		return false, ErrVersionNotFound
-	}
-	elog.Debug().Str("extension_version", extReq.Version).Msg("found version at Marketplace")
-
-	if db.VersionExists(ext.UniqueID(), extReq.Version) {
-		elog.Info().Str("extension_version", extReq.Version).Msg("skipping download, version already exist at output path")
-		return false, nil
-	}
-
 	// only keep the version from the request
 	ext = ext.KeepVersions(extReq.Version)
+	if len(ext.Versions) == 0 {
+		elog.Debug().Msg("requested version was not found at Marketplace")
+		return false, ErrVersionNotFound
+	}
 
-	if err := db.Save(ext); err != nil {
+	elog.Debug().Msg("found version at Marketplace")
+
+	if err := db.SaveExtension(ext); err != nil {
 		return false, err
+	}
+
+	for _, v := range ext.Versions {
+		if db.VersionExists(ext.UniqueID(), v) {
+			elog.Info().Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Msg("skipping download, already exist")
+		} else {
+			if err := db.SaveVersion(ext, v); err != nil {
+				return false, err
+			}
+		}
 	}
 
 	return true, nil

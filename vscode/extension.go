@@ -107,6 +107,14 @@ func (e Extension) IsExtensionPack() bool {
 	return len(e.ExtensionPack()) > 0
 }
 
+func (e Extension) IsMultiPlatform() bool {
+	v, _ := e.Version(e.LatestVersion())
+	if len(v) > 1 {
+		return v[0].TargetPlatform != ""
+	}
+	return false
+}
+
 func (e Extension) ExtensionPack() []string {
 	pack := []string{}
 	for _, p := range e.Versions[0].Properties {
@@ -216,11 +224,12 @@ func (e Extension) LatestVersion() string {
 	return e.Versions[0].Version
 }
 
-func (e Extension) Version(version string) (Version, bool) {
+func (e Extension) Version(version string) ([]Version, bool) {
+	versions := []Version{}
 	for _, v := range e.Versions {
 		if v.Version == version {
-			return v, true
+			versions = append(versions, v)
 		}
 	}
-	return Version{}, false
+	return versions, len(versions) > 0
 }

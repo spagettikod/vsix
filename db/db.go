@@ -45,19 +45,7 @@ type DBStats struct {
 	LoadDuration time.Duration
 }
 
-func New(root, assetEndpoint string) (*DB, error) {
-	db, err := Open(root)
-	if err != nil {
-		return nil, err
-	}
-
-	db.assetEndpoint = assetEndpoint
-
-	err = db.autoreload()
-	return db, err
-}
-
-func Open(root string) (*DB, error) {
+func Open(root string, autoreload bool) (*DB, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -73,14 +61,33 @@ func Open(root string) (*DB, error) {
 		return nil, err
 	}
 
+	if autoreload {
+		err := db.autoreload()
+		if err != nil {
+			return db, err
+		}
+	}
+
 	if db.Empty() {
 		db.dblog.Info().Msgf("could not find any extensions at %v", root)
 	} else {
 		stats := db.Stats()
-		db.dblog.Info().Msgf("serving %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
+		db.dblog.Info().Msgf("database contains %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
 	}
 
 	return db, err
+}
+
+func (db *DB) SetAssetEndpoint(assetEndpoint string) {
+	for _, e := range db.items {
+		for j, v := range e.Versions {
+			for i, f := range v.Files {
+				v.Files[i].Source = assetEndpoint + f.Source
+				e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
+				e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
+			}
+		}
+	}
 }
 
 // TODO remove later? only called from serve command
@@ -181,37 +188,52 @@ func (db *DB) saveExtensionMetadata(e vscode.Extension) error {
 }
 
 func (db *DB) saveVersionMetadata(e vscode.Extension, v vscode.Version) error {
-	// for _, v := range e.Versions {
 	if err := os.MkdirAll(VersionDir(db.root, e, v), os.ModePerm); err != nil {
 		return err
 	}
 	if err := ioutil.WriteFile(VersionMetaFile(db.root, e, v), []byte(v.String()), os.ModePerm); err != nil {
 		return err
 	}
-	// }
 	return nil
 }
 
-func (db *DB) Save(e vscode.Extension) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("dir", db.root).Logger()
+// rollback removes the entire version directory, called when sync fails
+func (db *DB) rollback(e vscode.Extension, v vscode.Version) error {
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
+	versionDir := VersionDir(db.root, e, v)
+	elog.Warn().Str("version_dir", versionDir).Msg("removing version directory due to rollback")
+	return os.RemoveAll(versionDir)
+}
+
+func (db *DB) SaveExtension(e vscode.Extension) error {
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Logger()
 	elog.Debug().Msg("saving extension metadata file")
-	if err := db.saveExtensionMetadata(e); err != nil {
-		return err
-	}
+	return db.saveExtensionMetadata(e)
+}
+
+func (db *DB) SaveVersion(e vscode.Extension, v vscode.Version) error {
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
+
 	elog.Debug().Msg("saving version metadata file")
-
-	v, _ := e.Version(e.LatestVersion())
 	if err := db.saveVersionMetadata(e, v); err != nil {
+		elog.Err(err).Msg("failed to save version metadata file")
+		err = db.rollback(e, v)
+		if err != nil {
+			elog.Err(err).Msg("rollback failed")
+		}
 		return err
 	}
 
-	for _, v := range e.Versions {
-		for _, a := range v.Files {
-			filename := AssetFile(db.root, e, v, a)
-			elog.Info().Str("source", a.Source).Str("destination", filename).Msg("downloading")
-			if err := a.Download(filename); err != nil {
-				return err
+	for _, a := range v.Files {
+		filename := AssetFile(db.root, e, v, a)
+		elog.Info().Str("source", a.Source).Str("destination", filename).Msg("downloading")
+		if err := a.Download(filename); err != nil {
+			elog.Err(err).Str("source", a.Source).Str("destination", filename).Msg("download failed")
+			err = db.rollback(e, v)
+			if err != nil {
+				elog.Err(err).Msg("rollback failed")
 			}
+			return err
 		}
 	}
 
@@ -220,14 +242,14 @@ func (db *DB) Save(e vscode.Extension) error {
 
 // VersionExists returns true if the given extension and version can be found. It
 // returns false if the extension can not be found.
-func (db *DB) VersionExists(uniqueID, version string) bool {
+func (db *DB) VersionExists(uniqueID string, version vscode.Version) bool {
 	exts := db.FindByUniqueID(false, uniqueID)
-	// if the extensions could not be would the version does not exist
+	// if the extensions could not be found the version does not exist
 	if len(exts) == 0 {
 		return false
 	}
 	for _, v := range exts[0].Versions {
-		if v.Version == version {
+		if v.Equals(version) {
 			return true
 		}
 	}
@@ -382,7 +404,7 @@ func (db *DB) listExtensions() []string {
 
 func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
 	db.dblog.Debug().Str("path", ext.Path).Msg("list extension versions")
-	matches, _ := fs.Glob(os.DirFS(ext.Path), "*")
+	matches, _ := fs.Glob(os.DirFS(ext.Path), "*/*")
 	versions := []vscode.Version{}
 	for _, m := range matches {
 		versionRoot := path.Join(ext.Path, m)
@@ -452,7 +474,7 @@ func (db *DB) versionAssets(versionRoot string) []vscode.Asset {
 			Str("asset_type", string(vscode.AssetTypeKey(filepath.Base(a)))).Msg("adding asset to extension")
 		asset := vscode.Asset{
 			Type:   vscode.AssetTypeKey(filepath.Base(a)),
-			Source: db.assetEndpoint + path.Join(pathelements[len(pathelements)-3], pathelements[len(pathelements)-2], pathelements[len(pathelements)-1], filepath.Base(a)),
+			Source: db.assetEndpoint + path.Join(pathelements[len(pathelements)-4], pathelements[len(pathelements)-3], pathelements[len(pathelements)-2], pathelements[len(pathelements)-1], filepath.Base(a)),
 			Path:   a,
 		}
 		assets = append(assets, asset)
