@@ -18,7 +18,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/db"
+	"github.com/spagettikod/vsix/database"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
@@ -74,7 +74,7 @@ below.
 		if len(serveDBRoot) > 0 {
 			root = serveDBRoot
 		}
-		db, err := db.Open(root, true)
+		db, err := database.OpenFs(root, true)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -167,7 +167,7 @@ func parseEndpoints(externalURL string) (server string, apiRoot string, assetRoo
 	return
 }
 
-func assetHandler(db *db.DB, assetURLPath string) http.Handler {
+func assetHandler(db *database.DB, assetURLPath string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
@@ -208,7 +208,7 @@ func assetHandler(db *db.DB, assetURLPath string) http.Handler {
 	})
 }
 
-func queryHandler(db *db.DB) http.Handler {
+func queryHandler(db *database.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 

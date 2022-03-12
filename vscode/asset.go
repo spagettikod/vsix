@@ -2,9 +2,8 @@ package vscode
 
 import (
 	"fmt"
-	"io"
+	"io/ioutil"
 	"net/http"
-	"os"
 )
 
 type AssetTypeKey string
@@ -57,16 +56,10 @@ func (a Asset) Is(t AssetTypeKey) bool {
 	return a.Type == t
 }
 
-func (a Asset) Download(destFilename string) error {
+func (a Asset) Download() ([]byte, error) {
 	resp, err := http.Get(a.Source)
 	if err != nil {
-		return err
+		return []byte{}, err
 	}
-	f, err := os.Create(destFilename)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	_, err = io.Copy(f, resp.Body)
-	return err
+	return ioutil.ReadAll(resp.Body)
 }

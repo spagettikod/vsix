@@ -1,4 +1,4 @@
-package cmd
+package marketplace
 
 import (
 	"bufio"
@@ -10,9 +10,10 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/db"
+	"github.com/spagettikod/vsix/database"
 	"github.com/spagettikod/vsix/vscode"
 )
 
@@ -20,6 +21,12 @@ type ExtensionRequest struct {
 	UniqueID string
 	Version  string
 }
+
+var (
+	ErrVersionNotFound           error = errors.New("could not find version at Marketplace")
+	ErrMultiplatformNotSupported error = errors.New("multi-platform extensions are not supported yet")
+	ErrOutDirNotFound            error = errors.New("output dir does not exist")
+)
 
 // NewFromFile will walk the given path in search of text files that contain valid extension request definitions.
 func NewFromFile(p string) ([]ExtensionRequest, error) {
@@ -188,19 +195,23 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 		Str("source", asset.Source).
 		Msg("downloading")
 	// download setting filename to asset type
-	return asset.Download(filename)
+	b, err := asset.Download()
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filename, b, 0666)
 }
 
 // Download will fetch the extension all its assets making it ready to be
 // served by the serve command. It returns true if download succeeded and
 // false if the requested version already exists at output.
-func (extReq ExtensionRequest) Download(db *db.DB) (bool, error) {
+func (extReq ExtensionRequest) Download() (vscode.Extension, error) {
 	elog := log.With().Str("extension", extReq.UniqueID).Str("extension_version", extReq.Version).Logger()
 
 	elog.Debug().Msg("searching for extension at Marketplace")
 	ext, err := vscode.NewExtension(extReq.UniqueID)
 	if err != nil {
-		return false, err
+		return vscode.Extension{}, err
 	}
 
 	// TODO ms-vscode-remote.vscode-remote-extensionpack seems to have a VSIX-file, does this mean
@@ -222,30 +233,17 @@ func (extReq ExtensionRequest) Download(db *db.DB) (bool, error) {
 		elog.Debug().Msg("version was not specified, setting to latest version")
 		extReq.Version = ext.LatestVersion()
 	}
+
 	// only keep the version from the request
 	ext = ext.KeepVersions(extReq.Version)
 	if len(ext.Versions) == 0 {
 		elog.Debug().Msg("requested version was not found at Marketplace")
-		return false, ErrVersionNotFound
+		return vscode.Extension{}, ErrVersionNotFound
 	}
 
 	elog.Debug().Msg("found version at Marketplace")
 
-	if err := db.SaveExtension(ext); err != nil {
-		return false, err
-	}
-
-	for _, v := range ext.Versions {
-		if db.VersionExists(ext.UniqueID(), v) {
-			elog.Info().Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Msg("skipping download, already exist")
-		} else {
-			if err := db.SaveVersion(ext, v); err != nil {
-				return false, err
-			}
-		}
-	}
-
-	return true, nil
+	return ext, nil
 }
 
 func outDirExists(path string) (bool, error) {
@@ -257,4 +255,45 @@ func outDirExists(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+func DownloadExtensions(extensions []ExtensionRequest, db *database.DB) (downloadCount int, errorCount int) {
+	for _, pe := range extensions {
+		extStart := time.Now()
+		extension, err := pe.Download()
+		if err != nil {
+			// if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
+			log.Error().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Err(err).Msg("unexpected error occured while syncing")
+			errorCount++
+			continue
+		}
+		downloadCount++
+		if err := db.SaveExtensionMetadata(extension); err != nil {
+			log.Err(err).Msg("could not save extension to database")
+		}
+		for _, v := range extension.Versions {
+			if err := db.SaveVersionMetadata(extension, v); err != nil {
+				log.Err(err).Msg("could not save version to database")
+			}
+			for _, a := range v.Files {
+				b, err := a.Download()
+				if err != nil {
+					log.Err(err).Str("source", a.Source).Msg("download failed")
+					err = db.Rollback(extension, v)
+					if err != nil {
+						log.Err(err).Msg("rollback failed")
+					}
+				}
+				if err := db.SaveAssetFile(extension, v, a, b); err != nil {
+					log.Err(err).Str("source", a.Source).Msg("could not save asset file")
+					err = db.Rollback(extension, v)
+					if err != nil {
+						log.Err(err).Msg("rollback failed")
+					}
+				}
+			}
+		}
+		log.Debug().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Msgf("sync took %.3fs", time.Since(extStart).Seconds())
+	}
+	return
 }
