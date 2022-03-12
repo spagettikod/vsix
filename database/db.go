@@ -1,10 +1,9 @@
-package db
+package database
 
 import (
 	"encoding/json"
 	"errors"
 	"io/fs"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
+	"github.com/spf13/afero"
 	"golang.org/x/mod/semver"
 )
 
@@ -36,6 +36,7 @@ type DB struct {
 	modFile       string
 	watcher       *fsnotify.Watcher
 	dblog         zerolog.Logger
+	fs            afero.Fs
 }
 
 type DBStats struct {
@@ -45,7 +46,7 @@ type DBStats struct {
 	LoadDuration time.Duration
 }
 
-func Open(root string, autoreload bool) (*DB, error) {
+func open(fs afero.Fs, root string, autoreload bool) (*DB, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -56,6 +57,7 @@ func Open(root string, autoreload bool) (*DB, error) {
 		items:   []vscode.Extension{},
 		modFile: path.Join(root, modFilename),
 		dblog:   dblog,
+		fs:      fs,
 	}
 	if err := db.load(); err != nil {
 		return nil, err
@@ -76,6 +78,14 @@ func Open(root string, autoreload bool) (*DB, error) {
 	}
 
 	return db, err
+}
+
+func OpenMem() (*DB, error) {
+	return open(afero.NewMemMapFs(), "/data", false)
+}
+
+func OpenFs(root string, autoreload bool) (*DB, error) {
+	return open(afero.NewOsFs(), root, autoreload)
 }
 
 func (db *DB) SetAssetEndpoint(assetEndpoint string) {
@@ -99,7 +109,7 @@ func (db *DB) autoreload() (err error) {
 	db.dblog.Debug().
 		Str("modfile", db.modFile).
 		Msg("checking if modfile exists")
-	_, err = os.Stat(db.modFile)
+	_, err = db.fs.Stat(db.modFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			db.dblog.Debug().
@@ -165,7 +175,7 @@ func (db *DB) Reload() error {
 
 // Modified notifies the database at path p that its content has been updated.
 func (db *DB) Modified() error {
-	f, err := os.Create(path.Join(db.root, modFilename))
+	f, err := db.fs.Create(path.Join(db.root, modFilename))
 	if err != nil {
 		return err
 	}
@@ -181,62 +191,74 @@ func (db *DB) saveExtensionMetadata(e vscode.Extension) error {
 	}
 	newExt := eqr.Results[0].Extensions[0]
 	newExt.Versions = []vscode.Version{}
-	if err := os.MkdirAll(ExtensionDir(db.root, newExt), os.ModePerm); err != nil {
+	if err := db.fs.MkdirAll(ExtensionDir(db.root, newExt), os.ModePerm); err != nil {
 		return err
 	}
-	return ioutil.WriteFile(ExtensionMetaFile(db.root, newExt), []byte(newExt.String()), os.ModePerm)
+	return afero.WriteFile(db.fs, ExtensionMetaFile(db.root, newExt), []byte(newExt.String()), os.ModePerm)
 }
 
 func (db *DB) saveVersionMetadata(e vscode.Extension, v vscode.Version) error {
-	if err := os.MkdirAll(VersionDir(db.root, e, v), os.ModePerm); err != nil {
+	if err := db.fs.MkdirAll(VersionDir(db.root, e, v), os.ModePerm); err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(VersionMetaFile(db.root, e, v), []byte(v.String()), os.ModePerm); err != nil {
+	if err := afero.WriteFile(db.fs, VersionMetaFile(db.root, e, v), []byte(v.String()), os.ModePerm); err != nil {
 		return err
 	}
 	return nil
 }
 
 // rollback removes the entire version directory, called when sync fails
-func (db *DB) rollback(e vscode.Extension, v vscode.Version) error {
+func (db *DB) Rollback(e vscode.Extension, v vscode.Version) error {
 	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
 	versionDir := VersionDir(db.root, e, v)
 	elog.Warn().Str("version_dir", versionDir).Msg("removing version directory due to rollback")
-	return os.RemoveAll(versionDir)
+	return db.fs.RemoveAll(versionDir)
 }
 
-func (db *DB) SaveExtension(e vscode.Extension) error {
+func (db *DB) SaveExtensionMetadata(e vscode.Extension) error {
 	elog := db.dblog.With().Str("extension", e.UniqueID()).Logger()
 	elog.Debug().Msg("saving extension metadata file")
 	return db.saveExtensionMetadata(e)
 }
 
-func (db *DB) SaveVersion(e vscode.Extension, v vscode.Version) error {
+func (db *DB) SaveVersionMetadata(e vscode.Extension, v vscode.Version) error {
 	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
 
 	elog.Debug().Msg("saving version metadata file")
 	if err := db.saveVersionMetadata(e, v); err != nil {
 		elog.Err(err).Msg("failed to save version metadata file")
-		err = db.rollback(e, v)
+		err = db.Rollback(e, v)
 		if err != nil {
 			elog.Err(err).Msg("rollback failed")
 		}
 		return err
 	}
 
-	for _, a := range v.Files {
-		filename := AssetFile(db.root, e, v, a)
-		elog.Info().Str("source", a.Source).Str("destination", filename).Msg("downloading")
-		if err := a.Download(filename); err != nil {
-			elog.Err(err).Str("source", a.Source).Str("destination", filename).Msg("download failed")
-			err = db.rollback(e, v)
-			if err != nil {
-				elog.Err(err).Msg("rollback failed")
-			}
-			return err
-		}
-	}
+	return nil
+}
 
+func (db *DB) SaveAssetFile(e vscode.Extension, v vscode.Version, a vscode.Asset, b []byte) error {
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
+	filename := AssetFile(db.root, e, v, a)
+	elog.Info().Str("source", a.Source).Str("destination", filename).Msg("downloading")
+	f, err := db.fs.Create(filename)
+	if err != nil {
+		elog.Err(err).Str("source", a.Source).Str("destination", filename).Msg("could not create file")
+		err = db.Rollback(e, v)
+		if err != nil {
+			elog.Err(err).Msg("rollback failed")
+		}
+		return err
+	}
+	defer f.Close()
+	if _, err := f.Write(b); err != nil {
+		elog.Err(err).Str("source", a.Source).Str("destination", filename).Msg("could not save file")
+		err = db.Rollback(e, v)
+		if err != nil {
+			elog.Err(err).Msg("rollback failed")
+		}
+		return err
+	}
 	return nil
 }
 
@@ -392,7 +414,8 @@ func (db *DB) load() error {
 // listExtensions returns a list of paths to extension in directory root. Valid extensions have a file named metadata.json at <root>/extensions/*/*/metadata.json.
 func (db *DB) listExtensions() []string {
 	db.dblog.Debug().Msg("searching for extensions")
-	matches, _ := fs.Glob(os.DirFS(db.root), "*/*")
+	matches, _ := afero.Glob(afero.NewBasePathFs(db.fs, db.root), "*/*")
+	// matches, _ := fs.Glob(os.DirFS(db.root), "*/*")
 	files := []string{}
 	for _, m := range matches {
 		p := path.Join(db.root, m)
@@ -404,11 +427,12 @@ func (db *DB) listExtensions() []string {
 
 func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
 	db.dblog.Debug().Str("path", ext.Path).Msg("list extension versions")
-	matches, _ := fs.Glob(os.DirFS(ext.Path), "*/*")
+	matches, _ := afero.Glob(afero.NewBasePathFs(db.fs, ext.Path), "*/*")
+	// matches, _ := fs.Glob(os.DirFS(ext.Path), "*/*")
 	versions := []vscode.Version{}
 	for _, m := range matches {
 		versionRoot := path.Join(ext.Path, m)
-		fi, err := os.Stat(versionRoot)
+		fi, err := db.fs.Stat(versionRoot)
 		if err != nil {
 			db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
 			continue
@@ -417,7 +441,7 @@ func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
 			metafile := path.Join(versionRoot, versionMetadataFileName)
 			db.dblog.Debug().Str("path", metafile).Str("file", m).Msg("found version candidate")
 			v := vscode.Version{}
-			b, err := ioutil.ReadFile(metafile)
+			b, err := afero.ReadFile(db.fs, metafile)
 			if err != nil {
 				db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
 				continue
@@ -437,7 +461,7 @@ func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
 func (db *DB) loadExtension(extensionRoot string) (vscode.Extension, error) {
 	metaFile := path.Join(extensionRoot, extensionMetadataFileName)
 	db.dblog.Debug().Str("path", metaFile).Msg("loading metadata")
-	b, err := ioutil.ReadFile(metaFile)
+	b, err := afero.ReadFile(db.fs, metaFile)
 	if err != nil {
 		return vscode.Extension{}, err
 	}

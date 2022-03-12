@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/db"
+	"github.com/spagettikod/vsix/database"
+	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +44,7 @@ output but the execution will not stop.`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
-		extensions, err := NewFromFile(args[0])
+		extensions, err := marketplace.NewFromFile(args[0])
 		if err != nil {
 			log.Fatal().Err(err).Str("path", args[0]).Msg("error while reading extension specification files")
 		}
@@ -51,53 +52,17 @@ output but the execution will not stop.`,
 			log.Fatal().Msgf("no extensions found at path '%s', exiting", args[0])
 		}
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
-		loggedErrors := 0
-		downloads := 0
-		d, err := db.Open(out, false)
+		db, err := database.OpenFs(out, false)
 		if err != nil {
 			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
 		}
-		for _, pe := range extensions {
-			extStart := time.Now()
-			success, err := pe.Download(d)
-			if err != nil {
-				// if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
-				log.Error().
-					Str("unique_id", pe.UniqueID).
-					Str("version", pe.Version).
-					Str("path", out).
-					Err(err).
-					Msg("unexpected error occured while syncing")
-				loggedErrors++
-			}
-			if success {
-				downloads++
-			}
-			log.Debug().
-				Str("unique_id", pe.UniqueID).
-				Str("version", pe.Version).
-				Str("path", out).
-				Msgf("sync took %.3fs", time.Since(extStart).Seconds())
-		}
-		log.Info().
-			Str("path", out).
-			Int("downloads", downloads).
-			Int("download_errors", loggedErrors).
-			Msgf("total time for sync %.3fs", time.Since(start).Seconds())
+		downloads, loggedErrors := marketplace.DownloadExtensions(extensions, db)
+		log.Info().Str("path", out).Int("downloads", downloads).Int("download_errors", loggedErrors).Msgf("total time for sync %.3fs", time.Since(start).Seconds())
 		if downloads > 0 {
-			log.Debug().
-				Str("path", out).
-				Int("downloads", downloads).
-				Int("download_errors", loggedErrors).
-				Msg("notifying database")
-			err = d.Modified()
+			log.Debug().Str("path", out).Int("downloads", downloads).Int("download_errors", loggedErrors).Msg("notifying database")
+			err = db.Modified()
 			if err != nil {
-				log.Fatal().
-					Err(err).
-					Str("path", out).
-					Int("downloads", downloads).
-					Int("download_errors", loggedErrors).
-					Msg("could not notify database of extension update")
+				log.Fatal().Err(err).Str("path", out).Int("downloads", downloads).Int("download_errors", loggedErrors).Msg("could not notify database of extension update")
 			}
 		}
 		if loggedErrors > 0 {

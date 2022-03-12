@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/db"
+	"github.com/spagettikod/vsix/database"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ another if the database format changed between versions.
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		db, err := db.Open(args[0], false)
+		db, err := database.OpenFs(args[0], false)
 		if err != nil {
 			if err != nil {
 				log.Fatal().Err(err).Str("path", args[0]).Msg("error while opening database")

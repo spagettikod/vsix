@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spf13/cobra"
 )
 
@@ -32,7 +33,7 @@ given version does not exist.`,
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		pe := ExtensionRequest{UniqueID: args[0]}
+		pe := marketplace.ExtensionRequest{UniqueID: args[0]}
 		if len(args) == 2 {
 			pe.Version = args[1]
 		}
@@ -40,7 +41,7 @@ given version does not exist.`,
 	},
 }
 
-func get(pe ExtensionRequest) {
+func get(pe marketplace.ExtensionRequest) {
 	if err := pe.DownloadVSIXPackage(out); err != nil {
 		fmt.Printf("%s: %s\n", pe, err)
 		os.Exit(1)
