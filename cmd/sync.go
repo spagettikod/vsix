@@ -12,6 +12,7 @@ import (
 
 func init() {
 	syncCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
+	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-seaprated list of target platforms to sync")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -50,6 +51,9 @@ output but the execution will not stop.`,
 		}
 		if len(extensions) == 0 {
 			log.Fatal().Msgf("no extensions found at path '%s', exiting", args[0])
+		}
+		for i := range extensions {
+			extensions[i].TargetPlatforms = targetPlatforms
 		}
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
 		db, err := database.OpenFs(out, false)
