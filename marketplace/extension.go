@@ -277,38 +277,45 @@ func DownloadExtensions(extensions []ExtensionRequest, db *database.DB) (downloa
 		extStart := time.Now()
 		extension, err := pe.Download()
 		if err != nil {
-			// if errors.Is(err, ErrVersionNotFound) || errors.Is(err, vscode.ErrExtensionNotFound) {
 			log.Error().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Err(err).Msg("unexpected error occured while syncing")
 			errorCount++
 			continue
 		}
+		elog := log.With().Str("unique_id", extension.UniqueID()).Logger()
 		downloadCount++
 		if err := db.SaveExtensionMetadata(extension); err != nil {
-			log.Err(err).Msg("could not save extension to database")
+			elog.Err(err).Msg("could not save extension to database")
 		}
 		for _, v := range extension.Versions {
+			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.TargetPlatform).Logger()
+			if !pe.ValidTargetPlatform(v) {
+				vlog.Debug().Msg("skipping, unwanted target platform")
+				continue
+			}
+			if db.VersionExists(extension.UniqueID(), v) {
+				vlog.Debug().Msg("skipping, version already exists")
+				continue
+			}
 			if err := db.SaveVersionMetadata(extension, v); err != nil {
-				log.Err(err).Msg("could not save version to database")
+				vlog.Err(err).Msg("could not save version to database")
 			}
 			for _, a := range v.Files {
 				b, err := a.Download()
 				if err != nil {
-					log.Err(err).Str("source", a.Source).Msg("download failed")
-					err = db.Rollback(extension, v)
-					if err != nil {
-						log.Err(err).Msg("rollback failed")
+					vlog.Err(err).Str("source", a.Source).Msg("download failed")
+					if err := db.Rollback(extension, v); err != nil {
+						vlog.Err(err).Msg("rollback failed")
 					}
 				}
 				if err := db.SaveAssetFile(extension, v, a, b); err != nil {
-					log.Err(err).Str("source", a.Source).Msg("could not save asset file")
-					err = db.Rollback(extension, v)
-					if err != nil {
-						log.Err(err).Msg("rollback failed")
+					vlog.Err(err).Str("source", a.Source).Msg("could not save asset file")
+					if err := db.Rollback(extension, v); err != nil {
+						vlog.Err(err).Msg("rollback failed")
 					}
 				}
 			}
 		}
-		log.Debug().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Msgf("sync took %.3fs", time.Since(extStart).Seconds())
+		elog.Debug().Msgf("sync took %.3fs", time.Since(extStart).Seconds())
 	}
 	return
 }
