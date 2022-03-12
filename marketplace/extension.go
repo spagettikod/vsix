@@ -10,10 +10,8 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/database"
 	"github.com/spagettikod/vsix/vscode"
 )
 
@@ -270,52 +268,4 @@ func outDirExists(path string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func DownloadExtensions(extensions []ExtensionRequest, db *database.DB) (downloadCount int, errorCount int) {
-	for _, pe := range extensions {
-		extStart := time.Now()
-		extension, err := pe.Download()
-		if err != nil {
-			log.Error().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Err(err).Msg("unexpected error occured while syncing")
-			errorCount++
-			continue
-		}
-		elog := log.With().Str("unique_id", extension.UniqueID()).Logger()
-		downloadCount++
-		if err := db.SaveExtensionMetadata(extension); err != nil {
-			elog.Err(err).Msg("could not save extension to database")
-		}
-		for _, v := range extension.Versions {
-			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.TargetPlatform).Logger()
-			if !pe.ValidTargetPlatform(v) {
-				vlog.Debug().Msg("skipping, unwanted target platform")
-				continue
-			}
-			if db.VersionExists(extension.UniqueID(), v) {
-				vlog.Debug().Msg("skipping, version already exists")
-				continue
-			}
-			if err := db.SaveVersionMetadata(extension, v); err != nil {
-				vlog.Err(err).Msg("could not save version to database")
-			}
-			for _, a := range v.Files {
-				b, err := a.Download()
-				if err != nil {
-					vlog.Err(err).Str("source", a.Source).Msg("download failed")
-					if err := db.Rollback(extension, v); err != nil {
-						vlog.Err(err).Msg("rollback failed")
-					}
-				}
-				if err := db.SaveAssetFile(extension, v, a, b); err != nil {
-					vlog.Err(err).Str("source", a.Source).Msg("could not save asset file")
-					if err := db.Rollback(extension, v); err != nil {
-						vlog.Err(err).Msg("rollback failed")
-					}
-				}
-			}
-		}
-		elog.Debug().Msgf("sync took %.3fs", time.Since(extStart).Seconds())
-	}
-	return
 }

@@ -1,17 +1,16 @@
-package cmd
+package database
 
 import (
 	"fmt"
 	"os"
 	"testing"
 
-	"github.com/spagettikod/vsix/database"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 )
 
 var (
-	memdb          *database.DB
+	memdb          *DB
 	testExtensions = []marketplace.ExtensionRequest{
 		{UniqueID: "golang.Go", Version: "0.31.1"},
 		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0"},
@@ -25,21 +24,49 @@ var (
 
 func TestMain(m *testing.M) {
 	var err error
-	memdb, err = database.OpenMem()
+	memdb, err = OpenMem()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(-1)
 	}
 
 	// download extensions to test database
-	downloads, errors := downloadExtensions(testExtensions, memdb)
-	if errors != 1 {
-		fmt.Printf("expected 1 error, got %v\n", errors)
-		os.Exit(-1)
-	}
-	if downloads != expectedExtensionCount {
-		fmt.Printf("expected %v downloads, got %v\n", expectedExtensionCount, downloads)
-		os.Exit(-1)
+	for _, pe := range testExtensions {
+		extension, err := pe.Download()
+		if err != nil {
+			if pe.UniqueID == "__no_real_extension" {
+				continue
+			}
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		if err := memdb.SaveExtensionMetadata(extension); err != nil {
+			fmt.Println(err)
+			os.Exit(-1)
+		}
+		for _, v := range extension.Versions {
+			if !pe.ValidTargetPlatform(v) {
+				continue
+			}
+			if memdb.VersionExists(extension.UniqueID(), v) {
+				continue
+			}
+			if err := memdb.SaveVersionMetadata(extension, v); err != nil {
+				fmt.Println(err)
+				os.Exit(-1)
+			}
+			for _, a := range v.Files {
+				b, err := a.Download()
+				if err != nil {
+					fmt.Println(err)
+					os.Exit(-1)
+				}
+				if err := memdb.SaveAssetFile(extension, v, a, b); err != nil {
+					fmt.Println(err)
+					os.Exit(-1)
+				}
+			}
+		}
 	}
 
 	// reload database with downloaded files
