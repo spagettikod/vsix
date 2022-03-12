@@ -17,8 +17,9 @@ import (
 )
 
 type ExtensionRequest struct {
-	UniqueID string
-	Version  string
+	UniqueID        string
+	Version         string
+	TargetPlatforms []string
 }
 
 // NewFromFile will walk the given path in search of text files that contain valid extension request definitions.
@@ -76,6 +77,20 @@ func parseFile(p string) ([]ExtensionRequest, error) {
 	}
 
 	return exts, nil
+}
+
+func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
+	// empty target platform equals Universal and is always valid so is
+	// an empty list of unwanted platforms
+	if v.TargetPlatform == "" || len(pe.TargetPlatforms) == 0 {
+		return true
+	}
+	for _, tp := range pe.TargetPlatforms {
+		if v.TargetPlatform == tp {
+			return true
+		}
+	}
+	return false
 }
 
 func (pe ExtensionRequest) String() string {
@@ -236,12 +251,16 @@ func (extReq ExtensionRequest) Download(db *db.DB) (bool, error) {
 	}
 
 	for _, v := range ext.Versions {
-		if db.VersionExists(ext.UniqueID(), v) {
-			elog.Info().Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Msg("skipping download, already exist")
-		} else {
-			if err := db.SaveVersion(ext, v); err != nil {
-				return false, err
+		if extReq.ValidTargetPlatform(v) {
+			if db.VersionExists(ext.UniqueID(), v) {
+				elog.Info().Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("extension_version_targetPlatform", v.TargetPlatform).Msg("skipping download, already exist")
+			} else {
+				if err := db.SaveVersion(ext, v); err != nil {
+					return false, err
+				}
 			}
+		} else {
+			elog.Debug().Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("extension_version_targetPlatform", v.TargetPlatform).Msg("skipping download, unwanted target platform")
 		}
 	}
 
