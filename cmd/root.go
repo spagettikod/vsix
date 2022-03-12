@@ -31,17 +31,18 @@ var (
 	verbose                      bool
 	debug                        bool
 	jsonLog                      bool
-	out                          string // used by sub-commands
-	limit                        int    // used by sub-commands
-	sortByFlag                   string // used by sub-commands
-	serveDBRoot                  string // used by sub-commands
-	serveAddr                    string // used by sub-commands
-	serveCert                    string // used by sub-commands
-	serveKey                     string // used by sub-commands
-	ErrFileExists                error  = errors.New("extension has already been downloaded")
-	ErrVersionNotFound           error  = errors.New("could not find version at Marketplace")
-	ErrOutDirNotFound            error  = errors.New("output dir does not exist")
-	ErrMultiplatformNotSupported error  = errors.New("multi-platform extensions are not supported yet")
+	out                          string   // used by sub-commands
+	limit                        int      // used by sub-commands
+	sortByFlag                   string   // used by sub-commands
+	serveDBRoot                  string   // used by sub-commands
+	serveAddr                    string   // used by sub-commands
+	serveCert                    string   // used by sub-commands
+	serveKey                     string   // used by sub-commands
+	targetPlatforms              []string // used by sub-commands
+	ErrFileExists                error    = errors.New("extension has already been downloaded")
+	ErrVersionNotFound           error    = errors.New("could not find version at Marketplace")
+	ErrOutDirNotFound            error    = errors.New("output dir does not exist")
+	ErrMultiplatformNotSupported error    = errors.New("multi-platform extensions are not supported yet")
 )
 
 func init() {
