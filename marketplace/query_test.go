@@ -1,6 +1,39 @@
 package marketplace
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
+
+func Test_Flags(t *testing.T) {
+	i := 51
+
+	fmt.Printf("FlagIncludeVersions = %v\n", FlagIncludeVersions.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeFiles = %v\n", FlagIncludeFiles.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeCatergoryAndTags = %v\n", FlagIncludeCatergoryAndTags.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeSharedAccounts = %v\n", FlagIncludeSharedAccounts.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeVersionProperties = %v\n", FlagIncludeVersionProperties.Is(QueryFlag(i)))
+	fmt.Printf("FlagExcludeNonValidated = %v\n", FlagExcludeNonValidated.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeInstallationTargets = %v\n", FlagIncludeInstallationTargets.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeAssetURI = %v\n", FlagIncludeAssetURI.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeStatistics = %v\n", FlagIncludeStatistics.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeLatestVersionOnly = %v\n", FlagIncludeLatestVersionOnly.Is(QueryFlag(i)))
+	fmt.Printf("FlagUnpublished = %v\n", FlagUnpublished.Is(QueryFlag(i)))
+
+	i = 950
+	fmt.Println("950")
+	fmt.Printf("FlagIncludeVersions = %v\n", FlagIncludeVersions.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeFiles = %v\n", FlagIncludeFiles.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeCatergoryAndTags = %v\n", FlagIncludeCatergoryAndTags.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeSharedAccounts = %v\n", FlagIncludeSharedAccounts.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeVersionProperties = %v\n", FlagIncludeVersionProperties.Is(QueryFlag(i)))
+	fmt.Printf("FlagExcludeNonValidated = %v\n", FlagExcludeNonValidated.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeInstallationTargets = %v\n", FlagIncludeInstallationTargets.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeAssetURI = %v\n", FlagIncludeAssetURI.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeStatistics = %v\n", FlagIncludeStatistics.Is(QueryFlag(i)))
+	fmt.Printf("FlagIncludeLatestVersionOnly = %v\n", FlagIncludeLatestVersionOnly.Is(QueryFlag(i)))
+	fmt.Printf("FlagUnpublished = %v\n", FlagUnpublished.Is(QueryFlag(i)))
+}
 
 func Test_AddCritera(t *testing.T) {
 	q := NewQuery()
