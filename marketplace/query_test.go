@@ -1,4 +1,4 @@
-package vscode
+package marketplace
 
 import "testing"
 

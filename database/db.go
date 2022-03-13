@@ -14,6 +14,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/afero"
 	"golang.org/x/mod/semver"
@@ -173,7 +174,7 @@ func (db *DB) Modified() error {
 func (db *DB) saveExtensionMetadata(e vscode.Extension) error {
 	// save extension metadata
 	// re-run query to populate statistics, list versions query does not populate statistics, is there another way?
-	eqr, err := vscode.RunQuery(vscode.LatestQueryJSON(e.UniqueID()))
+	eqr, err := marketplace.QueryLatestVersionByUniqueID(e.UniqueID()).Run()
 	if err != nil {
 		return err
 	}
