@@ -19,6 +19,7 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/database"
+	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
@@ -223,7 +224,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 					serverError(w, r, fmt.Errorf("error while reading request body: %v", err))
 					return
 				}
-				query := vscode.Query{}
+				query := marketplace.Query{}
 				hlog.FromRequest(r).Debug().Msg("unmarshaling JSON")
 				err = json.Unmarshal(b, &query)
 				if err != nil {
@@ -248,26 +249,26 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 
 				results := vscode.NewResults([]vscode.Extension{})
 
-				uniqueIDs := query.CriteriaValues(vscode.FilterTypeExtensionName)
+				uniqueIDs := query.CriteriaValues(marketplace.FilterTypeExtensionName)
 				if len(uniqueIDs) > 0 {
 					hlog.FromRequest(r).Debug().Msgf("found array of extension names in query: %v", uniqueIDs)
-					extensions := db.FindByUniqueID(query.Flags == vscode.FlagLatestVersion, uniqueIDs...)
+					extensions := db.FindByUniqueID(query.Flags == marketplace.FlagLatestVersion, uniqueIDs...)
 					hlog.FromRequest(r).Debug().Msgf("extension name database query found %v extension", len(extensions))
 					results = vscode.NewResults(extensions)
 				}
 
-				searchValues := query.CriteriaValues(vscode.FilterTypeSearchText)
+				searchValues := query.CriteriaValues(marketplace.FilterTypeSearchText)
 				if len(searchValues) > 0 {
 					hlog.FromRequest(r).Debug().Msgf("found text searches in query: %v", searchValues)
-					extensions := db.Search(query.Flags == vscode.FlagLatestVersion, searchValues...)
+					extensions := db.Search(query.Flags == marketplace.FlagLatestVersion, searchValues...)
 					hlog.FromRequest(r).Debug().Msgf("free text database query found %v extension", len(extensions))
 					results = vscode.NewResults(extensions)
 				}
 
-				extIDs := query.CriteriaValues(vscode.FilterTypeExtensionID)
+				extIDs := query.CriteriaValues(marketplace.FilterTypeExtensionID)
 				if len(extIDs) > 0 {
 					hlog.FromRequest(r).Debug().Msgf("found array of extension identifiers in query: %v", extIDs)
-					extensions := db.FindByExtensionID(query.Flags == vscode.FlagLatestVersion, extIDs...)
+					extensions := db.FindByExtensionID(query.Flags == marketplace.FlagLatestVersion, extIDs...)
 					hlog.FromRequest(r).Debug().Msgf("extension identifier database query found %v extension", len(extensions))
 					results = vscode.NewResults(extensions)
 				}

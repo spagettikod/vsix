@@ -7,8 +7,7 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/vscode"
-
+	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spf13/cobra"
 )
 
@@ -36,11 +35,12 @@ var searchCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		exts, err := vscode.Search(q, limit, sortCritera)
+		eqr, err := marketplace.QueryLastestVersionByText(q, limit, sortCritera).Run()
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+		exts := eqr.Results[0].Extensions
 		data := [][]string{}
 		for _, ext := range exts {
 			extData := []string{}
@@ -81,12 +81,12 @@ var searchCmd = &cobra.Command{
 	},
 }
 
-func parseSortCriteria(sortBy string) (vscode.SortCriteria, error) {
+func parseSortCriteria(sortBy string) (marketplace.SortCriteria, error) {
 	switch sortBy {
 	case "install":
-		return vscode.ByInstallCount, nil
+		return marketplace.ByInstallCount, nil
 	case "none":
-		return vscode.ByNone, nil
+		return marketplace.ByNone, nil
 	}
-	return vscode.ByNone, fmt.Errorf("%s is not a valid sort critera", sortBy)
+	return marketplace.ByNone, fmt.Errorf("%s is not a valid sort critera", sortBy)
 }

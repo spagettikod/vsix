@@ -1,15 +1,11 @@
 package marketplace
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/http"
 	"os"
 	"path"
-	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
@@ -27,61 +23,17 @@ var (
 	ErrOutDirNotFound            error = errors.New("output dir does not exist")
 )
 
-// NewFromFile will walk the given path in search of text files that contain valid extension request definitions.
-func NewFromFile(p string) ([]ExtensionRequest, error) {
-	ers := []ExtensionRequest{}
-	dir, err := isDir(p)
+func FetchExtension(uniqueID string) (vscode.Extension, error) {
+	eqr, err := QueryLatestVersionByUniqueID(uniqueID).Run()
 	if err != nil {
-		return ers, err
+		return vscode.Extension{}, err
 	}
-	if dir {
-		log.Debug().Str("path", p).Msg("found directory")
-		fis, err := ioutil.ReadDir(p)
-		if err != nil {
-			return ers, err
-		}
-		for _, fi := range fis {
-			if !fi.IsDir() {
-				newErs, err := NewFromFile(fmt.Sprintf("%s%s%s", p, string(os.PathSeparator), fi.Name()))
-				if err != nil {
-					return ers, err
-				}
-				ers = append(ers, newErs...)
-			}
-		}
-	} else {
-		newErs, err := parseFile(p)
-		if err != nil {
-			return newErs, err
-		}
-		ers = append(ers, newErs...)
-	}
-	log.Debug().Msgf("found %v extensions in total", len(ers))
-	return ers, err
-}
-
-func parseFile(p string) ([]ExtensionRequest, error) {
-	exts := []ExtensionRequest{}
-
-	plog := log.With().Str("filename", p).Logger()
-
-	plog.Info().Msg("found file")
-	data, err := ioutil.ReadFile(p)
+	uuid := eqr.Results[0].Extensions[0].ID
+	eqr, err = QueryAllVersionsByUniqueID(uuid).Run()
 	if err != nil {
-		return exts, err
+		return vscode.Extension{}, err
 	}
-	if isPlainText(data) {
-		plog.Debug().Msg("parsing file")
-		exts, err = parse(data)
-		if err != nil {
-			return exts, err
-		}
-		plog.Info().Msgf("found %v extentions in file", len(exts))
-	} else {
-		plog.Info().Msg("skipping, not a text file")
-	}
-
-	return exts, nil
+	return eqr.Results[0].Extensions[0], err
 }
 
 func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
@@ -105,48 +57,6 @@ func (pe ExtensionRequest) String() string {
 	return fmt.Sprintf("%s-%s", pe.UniqueID, pe.Version)
 }
 
-// isPlainText will try to auto detect if the given data is a text file.
-func isPlainText(data []byte) bool {
-	mime := http.DetectContentType(data)
-	return strings.Index(mime, "text/plain") == 0
-}
-
-// isDir returns true if the given path is a directory
-func isDir(p string) (bool, error) {
-	info, err := os.Stat(p)
-	if err != nil {
-		return false, err
-	}
-	return info.IsDir(), nil
-}
-
-// parse will process file data and extract all valid extension requests from the file
-func parse(data []byte) (extensions []ExtensionRequest, err error) {
-	buf := bytes.NewBuffer(data)
-	scanner := bufio.NewScanner(buf)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if strings.Index(line, "#") == 0 || len(line) == 0 {
-			continue
-		}
-		splitLine := strings.Split(line, " ")
-		ext := ExtensionRequest{}
-		if len(splitLine) > 0 && len(splitLine) < 3 {
-			ext.UniqueID = strings.TrimSpace(splitLine[0])
-			if len(splitLine) == 2 {
-				ext.Version = strings.TrimSpace(splitLine[1])
-			}
-			extensions = append(extensions, ext)
-			if ext.Version == "" {
-				log.Debug().Str("extension", ext.UniqueID).Msg("parsed")
-			} else {
-				log.Debug().Str("extension", ext.UniqueID).Str("version", ext.Version).Msg("parsed")
-			}
-		}
-	}
-	return extensions, scanner.Err()
-}
-
 // rewrite this, half the code is the same as Download, recursive function complicates things,
 // maybe rethink the entire setup?
 func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
@@ -159,7 +69,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 	}
 
 	elog.Info().Msg("searching for extension at Marketplace")
-	ext, err := vscode.NewExtension(pe.UniqueID)
+	ext, err := FetchExtension(pe.UniqueID)
 	if err != nil {
 		return err
 	}
@@ -222,7 +132,7 @@ func (extReq ExtensionRequest) Download() (vscode.Extension, error) {
 	elog := log.With().Str("extension", extReq.UniqueID).Str("extension_version", extReq.Version).Logger()
 
 	elog.Debug().Msg("searching for extension at Marketplace")
-	ext, err := vscode.NewExtension(extReq.UniqueID)
+	ext, err := FetchExtension(extReq.UniqueID)
 	if err != nil {
 		return vscode.Extension{}, err
 	}
