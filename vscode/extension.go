@@ -3,30 +3,17 @@ package vscode
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"os"
 	"strings"
 	"time"
 )
 
 const (
 	propKeyExtensionPack = "Microsoft.VisualStudio.Code.ExtensionPack"
-	debugEnvVar          = "VSIX_DEBUG"
 )
 
 var (
-	ErrExtensionNotFound      = errors.New("extension could not be found at Marketplace")
-	ErrExtensionHasNoVersions = errors.New("extension has no versions")
-	ErrVersionNotFound        = errors.New("version was not found for this extension")
+	ErrVersionNotFound = errors.New("version was not found for this extension")
 )
-
-type extensionQueryResponse struct {
-	Results []struct {
-		Extensions []Extension `json:"extensions"`
-	} `json:"results"`
-}
 
 type Extension struct {
 	Publisher        Publisher   `json:"publisher"`
@@ -58,27 +45,6 @@ type Publisher struct {
 type Statistic struct {
 	Name  string  `json:"statisticName"`
 	Value float32 `json:"value"`
-}
-
-func Search(query string, limit int, sortBy SortCriteria) ([]Extension, error) {
-	eqr, err := RunQuery(searchQueryJSON(query, limit, sortBy))
-	if err != nil {
-		return []Extension{}, err
-	}
-	return eqr.Results[0].Extensions, nil
-}
-
-func NewExtension(uniqueID string) (Extension, error) {
-	eqr, err := RunQuery(LatestQueryJSON(uniqueID))
-	if err != nil {
-		return Extension{}, err
-	}
-	uuid := eqr.Results[0].Extensions[0].ID
-	eqr, err = RunQuery(listVersionsQueryJSON(uuid))
-	if err != nil {
-		return Extension{}, err
-	}
-	return eqr.Results[0].Extensions[0], err
 }
 
 // Assets return the assets for a certain version of an extension.
@@ -178,45 +144,6 @@ func (e Extension) String() string {
 		return "! JSON UNMARSHAL FAILED !"
 	}
 	return string(b)
-}
-
-func RunQuery(q string) (extensionQueryResponse, error) {
-	if _, debug := os.LookupEnv(debugEnvVar); debug {
-		ioutil.WriteFile("query.json", []byte(q), 0644)
-	}
-	eqr := extensionQueryResponse{}
-	req, err := http.NewRequest(http.MethodPost, "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery", strings.NewReader(q))
-	if err != nil {
-		return eqr, err
-	}
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Accept", "application/json;api-version=3.0-preview.1")
-	c := http.Client{}
-	resp, err := c.Do(req)
-	if err != nil {
-		return eqr, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return eqr, fmt.Errorf("marketplace.visualstudio.com returned HTTP %v", resp.StatusCode)
-	}
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return eqr, err
-	}
-	if _, debug := os.LookupEnv(debugEnvVar); debug {
-		ioutil.WriteFile("response.json", b, 0644)
-	}
-	err = json.Unmarshal(b, &eqr)
-	if err != nil {
-		return eqr, err
-	}
-	if len(eqr.Results[0].Extensions) == 0 {
-		return eqr, ErrExtensionNotFound
-	}
-	if len(eqr.Results[0].Extensions[0].Versions) == 0 {
-		return eqr, ErrExtensionHasNoVersions
-	}
-	return eqr, err
 }
 
 // LatestVersion returns the latest version number for the extension with the given unique ID.
