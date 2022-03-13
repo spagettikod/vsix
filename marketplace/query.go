@@ -45,7 +45,6 @@ type Criteria struct {
 }
 
 type SortCriteria int
-type QueryFlag int
 type FilterType int
 
 const (
@@ -55,8 +54,17 @@ const (
 	ByInstallCount  SortCriteria = 4
 	ByRating        SortCriteria = 12
 
-	FlagAllVersions   QueryFlag = 51
-	FlagLatestVersion QueryFlag = 950
+	FlagIncludeVersions            QueryFlag = 0x1
+	FlagIncludeFiles               QueryFlag = 0x2
+	FlagIncludeCatergoryAndTags    QueryFlag = 0x4
+	FlagIncludeSharedAccounts      QueryFlag = 0x8
+	FlagIncludeVersionProperties   QueryFlag = 0x10
+	FlagExcludeNonValidated        QueryFlag = 0x20
+	FlagIncludeInstallationTargets QueryFlag = 0x40
+	FlagIncludeAssetURI            QueryFlag = 0x80
+	FlagIncludeStatistics          QueryFlag = 0x100
+	FlagIncludeLatestVersionOnly   QueryFlag = 0x200
+	FlagUnpublished                QueryFlag = 0x1000
 
 	FilterTypeTag           FilterType = 1
 	FilterTypeExtensionID   FilterType = 4
@@ -89,6 +97,12 @@ type extensionQueryResponse struct {
 	} `json:"results"`
 }
 
+type QueryFlag int
+
+func (f QueryFlag) Is(f2 QueryFlag) bool {
+	return (f2 & f) == f
+}
+
 func NewQuery() Query {
 	q := Query{}
 	f := Filter{
@@ -102,7 +116,7 @@ func NewQuery() Query {
 		SortOrder:  0,
 	}
 	q.Filters = append(q.Filters, f)
-	q.Flags = FlagLatestVersion
+	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags
 	return q
 }
 
@@ -178,7 +192,7 @@ func QueryLastestVersionByText(query string, limit int, sortBy SortCriteria) Que
 		FilterType: FilterTypeSearchText,
 		Value:      query,
 	})
-	q.Flags = FlagLatestVersion
+	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags
 	q.Filters[0].SortBy = sortBy
 	q.Filters[0].PageSize = limit
 	return q
@@ -190,7 +204,7 @@ func QueryLatestVersionByUniqueID(uniqueID string) Query {
 		FilterType: FilterTypeExtensionName,
 		Value:      uniqueID,
 	})
-	q.Flags = FlagLatestVersion
+	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags
 	return q
 }
 
@@ -200,6 +214,6 @@ func QueryAllVersionsByUniqueID(uniqueID string) Query {
 		FilterType: FilterTypeExtensionID,
 		Value:      uniqueID,
 	})
-	q.Flags = FlagAllVersions
+	q.Flags = FlagIncludeVersions | FlagIncludeFiles | FlagIncludeVersionProperties | FlagExcludeNonValidated
 	return q
 }

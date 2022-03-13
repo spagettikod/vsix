@@ -252,7 +252,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 				uniqueIDs := query.CriteriaValues(marketplace.FilterTypeExtensionName)
 				if len(uniqueIDs) > 0 {
 					hlog.FromRequest(r).Debug().Msgf("found array of extension names in query: %v", uniqueIDs)
-					extensions := db.FindByUniqueID(query.Flags == marketplace.FlagLatestVersion, uniqueIDs...)
+					extensions := db.FindByUniqueID(query.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), uniqueIDs...)
 					hlog.FromRequest(r).Debug().Msgf("extension name database query found %v extension", len(extensions))
 					results = vscode.NewResults(extensions)
 				}
@@ -260,7 +260,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 				searchValues := query.CriteriaValues(marketplace.FilterTypeSearchText)
 				if len(searchValues) > 0 {
 					hlog.FromRequest(r).Debug().Msgf("found text searches in query: %v", searchValues)
-					extensions := db.Search(query.Flags == marketplace.FlagLatestVersion, searchValues...)
+					extensions := db.Search(query.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), searchValues...)
 					hlog.FromRequest(r).Debug().Msgf("free text database query found %v extension", len(extensions))
 					results = vscode.NewResults(extensions)
 				}
@@ -268,7 +268,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 				extIDs := query.CriteriaValues(marketplace.FilterTypeExtensionID)
 				if len(extIDs) > 0 {
 					hlog.FromRequest(r).Debug().Msgf("found array of extension identifiers in query: %v", extIDs)
-					extensions := db.FindByExtensionID(query.Flags == marketplace.FlagLatestVersion, extIDs...)
+					extensions := db.FindByExtensionID(query.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), extIDs...)
 					hlog.FromRequest(r).Debug().Msgf("extension identifier database query found %v extension", len(extensions))
 					results = vscode.NewResults(extensions)
 				}
