@@ -25,12 +25,15 @@ var (
 	expectedExtensionVersionCount = 4
 )
 
-func TestMain(m *testing.M) {
+func TestIntegrationTests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
+
 	var err error
 	memdb, err = database.OpenMem()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
+		t.Fatal(err)
 	}
 
 	// download extensions to test database
@@ -46,11 +49,16 @@ func TestMain(m *testing.M) {
 
 	// reload database with downloaded files
 	if err := memdb.Reload(); err != nil {
-		fmt.Println(err)
-		os.Exit(-1)
+		t.Fatal(err)
 	}
 
-	os.Exit(m.Run())
+	t.Run("TestValidateExtensionDB", TestValidateExtensionDB)
+	t.Run("TestDump", TestDump)
+	t.Run("TestFindByUniqueID", TestFindByUniqueID)
+	t.Run("TestFindByExtensionID", TestFindByExtensionID)
+	t.Run("TestVersionExists", TestVersionExists)
+	t.Run("TestEmpty", TestEmpty)
+	t.Run("TestSearch", TestSearch)
 }
 
 func isTestExtension(ext vscode.Extension, version string) bool {
@@ -63,6 +71,9 @@ func isTestExtension(ext vscode.Extension, version string) bool {
 }
 
 func TestValidateExtensionDB(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	exts := memdb.List()
 	if len(exts) != expectedExtensionCount {
 		t.Errorf("extected %v extension, got %v", expectedExtensionCount, len(exts))
@@ -77,6 +88,9 @@ func TestValidateExtensionDB(t *testing.T) {
 }
 
 func TestDump(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	exts := memdb.List()
 	for _, ext := range exts {
 		if !isTestExtension(ext, ext.LatestVersion()) {
@@ -86,6 +100,9 @@ func TestDump(t *testing.T) {
 }
 
 func TestFindByUniqueID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	e := memdb.FindByUniqueID(false, "esbenp.prettier-vscode")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
@@ -114,6 +131,9 @@ func TestFindByUniqueID(t *testing.T) {
 }
 
 func TestFindByExtensionID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	e := memdb.FindByExtensionID(false, "d6f6cfea-4b6f-41f4-b571-6ad2ab7918da")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
@@ -150,6 +170,9 @@ func TestFindByExtensionID(t *testing.T) {
 }
 
 func TestVersionExists(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	v := vscode.Version{Version: "9.3.0", AssetURI: "/esbenp/prettier-vscode/9.3.0/1645467140557"}
 	if !memdb.VersionExists("esbenp.prettier-vscode", v) {
 		t.Errorf("extected version %v to exist but it was not found", "9.3.0")
@@ -161,12 +184,18 @@ func TestVersionExists(t *testing.T) {
 }
 
 func TestEmpty(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	if memdb.Empty() {
 		t.Error("expected database to contain values instead Empty returned true")
 	}
 }
 
 func TestSearch(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
 	e := memdb.Search(false, "Code formatter")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
