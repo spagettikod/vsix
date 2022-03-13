@@ -19,6 +19,8 @@ var (
 		{UniqueID: "__no_real_extension", Version: "0.0.0"},
 		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315"},
 	}
+	expectedDownloadCount         = 4
+	expectedErrorCount            = 1
 	expectedExtensionCount        = 3
 	expectedExtensionVersionCount = 4
 )
@@ -33,12 +35,12 @@ func TestMain(m *testing.M) {
 
 	// download extensions to test database
 	downloads, errors := downloadExtensions(testExtensions, memdb)
-	if errors != 1 {
-		fmt.Printf("expected 1 error, got %v\n", errors)
+	if errors != expectedErrorCount {
+		fmt.Printf("expected %v error, got %v\n", expectedErrorCount, errors)
 		os.Exit(-1)
 	}
-	if downloads != expectedExtensionCount {
-		fmt.Printf("expected %v downloads, got %v\n", expectedExtensionCount, downloads)
+	if downloads != expectedDownloadCount {
+		fmt.Printf("expected %v downloads, got %v\n", expectedDownloadCount, downloads)
 		os.Exit(-1)
 	}
 
