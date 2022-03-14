@@ -15,6 +15,7 @@ type ExtensionRequest struct {
 	UniqueID        string
 	Version         string
 	TargetPlatforms []string
+	PreRelease      bool
 }
 
 var (

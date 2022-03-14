@@ -39,6 +39,7 @@ var (
 	serveCert                    string   // used by sub-commands
 	serveKey                     string   // used by sub-commands
 	targetPlatforms              []string // used by sub-commands
+	preRelease                   bool     // used by sub-commands
 	ErrFileExists                error    = errors.New("extension has already been downloaded")
 	ErrVersionNotFound           error    = errors.New("could not find version at Marketplace")
 	ErrOutDirNotFound            error    = errors.New("output dir does not exist")
