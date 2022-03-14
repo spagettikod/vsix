@@ -1,6 +1,9 @@
 package vscode
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"path"
+)
 
 type Results struct {
 	Results []*Result `json:"results"`
@@ -57,6 +60,20 @@ func (r Results) Deduplicate() {
 			}
 		}
 		result.Extensions = dedup
+	}
+}
+
+func (r Results) SetAssetEndpoint(assetEndpoint string) {
+	for _, res := range r.Results {
+		for _, e := range res.Extensions {
+			for j, v := range e.Versions {
+				for i, f := range v.Files {
+					v.Files[i].Source = assetEndpoint + f.Source
+					e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
+					e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
+				}
+			}
+		}
 	}
 }
 

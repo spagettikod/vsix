@@ -88,18 +88,6 @@ func OpenFs(root string, autoreload bool) (*DB, error) {
 	return open(afero.NewOsFs(), root, autoreload)
 }
 
-func (db *DB) SetAssetEndpoint(assetEndpoint string) {
-	for _, e := range db.items {
-		for j, v := range e.Versions {
-			for i, f := range v.Files {
-				v.Files[i].Source = assetEndpoint + f.Source
-				e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
-				e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
-			}
-		}
-	}
-}
-
 // TODO remove later? only called from serve command
 func (db *DB) Root() string {
 	return db.root

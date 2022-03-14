@@ -79,7 +79,6 @@ below.
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		db.SetAssetEndpoint(server + assetRoot)
 
 		stack := alice.New(
 			hlog.NewHandler(log.Logger),
@@ -99,7 +98,7 @@ below.
 
 		// setup and start server
 		http.Handle(assetRoot, stack.Then(assetHandler(db, "/"+assetRoot)))
-		http.Handle(apiRoot, stack.Then(queryHandler(db)))
+		http.Handle(apiRoot, stack.Then(queryHandler(db, server, assetRoot)))
 
 		log.Info().Msgf("Use this server in Visual Studio Code by setting \"serviceUrl\" in the file product.json to \"%s\"", server+apiRoot[:strings.LastIndex(apiRoot, "/")])
 		log.Debug().Msgf("assets are served from %s", server+assetRoot)
@@ -208,7 +207,7 @@ func assetHandler(db *database.DB, assetURLPath string) http.Handler {
 	})
 }
 
-func queryHandler(db *database.DB) http.Handler {
+func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
@@ -275,6 +274,8 @@ func queryHandler(db *database.DB) http.Handler {
 
 				// remove extensions found in both queries
 				results.Deduplicate()
+
+				results.SetAssetEndpoint(server + assetRoot)
 
 				hlog.FromRequest(r).Debug().Msg("marshaling results to JSON")
 				b, err = json.Marshal(results)
