@@ -13,6 +13,7 @@ import (
 func init() {
 	syncCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
 	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-seaprated list of target platforms to sync")
+	syncCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
 	rootCmd.AddCommand(syncCmd)
 }
 
@@ -54,6 +55,7 @@ output but the execution will not stop.`,
 		}
 		for i := range extensions {
 			extensions[i].TargetPlatforms = targetPlatforms
+			extensions[i].PreRelease = preRelease
 		}
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
 		db, err := database.OpenFs(out, false)
@@ -90,6 +92,10 @@ func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.
 		}
 		for _, v := range extension.Versions {
 			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.TargetPlatform).Logger()
+			if !pe.PreRelease && v.IsPreRelease() {
+				vlog.Debug().Msg("skipping, version is a pre-release")
+				continue
+			}
 			if !pe.ValidTargetPlatform(v) {
 				vlog.Debug().Msg("skipping, unwanted target platform")
 				continue
