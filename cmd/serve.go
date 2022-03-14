@@ -98,7 +98,7 @@ below.
 		)
 
 		// setup and start server
-		http.Handle(assetRoot, stack.Then(assetHandler(db, "/"+assetURLPath)))
+		http.Handle(assetRoot, stack.Then(assetHandler(db, "/"+assetRoot)))
 		http.Handle(apiRoot, stack.Then(queryHandler(db)))
 
 		log.Info().Msgf("Use this server in Visual Studio Code by setting \"serviceUrl\" in the file product.json to \"%s\"", server+apiRoot[:strings.LastIndex(apiRoot, "/")])
@@ -177,7 +177,7 @@ func assetHandler(db *database.DB, assetURLPath string) http.Handler {
 		case http.MethodGet:
 			hlog.FromRequest(r).Debug().Msgf("extracting filename from path: %s", r.URL.Path)
 			// assemble filename from request URL
-			filePath := path.Join(db.Root(), r.URL.Path[len(assetURLPath):])
+			filePath := path.Join(db.Root(), r.URL.Path[len(assetURLPath)-1:])
 
 			// set content type top json if returned file path is a manifest
 			if strings.Contains(filePath, "Manifest") {
