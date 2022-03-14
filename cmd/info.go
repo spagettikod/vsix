@@ -28,13 +28,14 @@ var infoCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		s := `Name:             %s
-Publisher:        %s
-Latest version:   %s
-Target platforms: %s
-Released on:      %s
-Last updated:     %s
-Extension pack:   %s
+		s := `Name:                %s
+Publisher:            %s
+Latest version:       %s
+Pre-relase version:   %v
+Target platforms:     %s
+Released on:          %s
+Last updated:         %s
+Extension pack:       %s
 
 %s
 
@@ -52,6 +53,7 @@ Extension pack:   %s
 			ext.Name,
 			ext.Publisher.DisplayName,
 			ext.LatestVersion(),
+			version[0].IsPreRelease(),
 			strings.Join(targetPlatforms, "\n                  "),
 			ext.ReleaseDate.Format("2006-01-02 15:04 UTC"),
 			ext.LastUpdated.Format("2006-01-02 15:04 UTC"),
