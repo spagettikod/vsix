@@ -103,6 +103,18 @@ func (e Extension) Asset(version string, assetType AssetTypeKey) (Asset, bool) {
 	return Asset{}, false
 }
 
+func (e Extension) Copy() Extension {
+	e2 := e
+	e2.Categories = append([]string{}, e.Categories...)
+	e2.Tags = append([]string{}, e.Tags...)
+	e2.Statistics = append([]Statistic{}, e.Statistics...)
+	e2.Versions = []Version{}
+	for _, v := range e.Versions {
+		e2.Versions = append(e2.Versions, v.Copy())
+	}
+	return e2
+}
+
 func (e Extension) IsExtensionPack() bool {
 	return len(e.ExtensionPack()) > 0
 }

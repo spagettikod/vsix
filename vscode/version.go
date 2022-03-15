@@ -34,6 +34,13 @@ func (v Version) Equals(comp Version) bool {
 	return (v.Version == comp.Version) && (v.ID() == comp.ID())
 }
 
+func (v Version) Copy() Version {
+	v2 := v
+	v2.Files = append([]Asset{}, v.Files...)
+	v2.Properties = append([]Property{}, v.Properties...)
+	return v2
+}
+
 func (v Version) String() string {
 	b, err := json.MarshalIndent(v, "", "   ")
 	if err != nil {

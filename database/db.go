@@ -281,7 +281,7 @@ func (db *DB) FindByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vsco
 			if keepLatestVersion {
 				i = i.KeepVersions(i.LatestVersion())
 			}
-			result = append(result, i)
+			result = append(result, i.Copy())
 		}
 	}
 	return result
@@ -300,7 +300,7 @@ func (db *DB) FindByExtensionID(keepLatestVersion bool, ids ...string) []vscode.
 			if keepLatestVersion {
 				i = i.KeepVersions(i.LatestVersion())
 			}
-			result = append(result, i)
+			result = append(result, i.Copy())
 		}
 	}
 	return result
@@ -322,7 +322,7 @@ func (db *DB) Search(keepLatestVersion bool, text ...string) []vscode.Extension 
 			if keepLatestVersion {
 				i = i.KeepVersions(i.LatestVersion())
 			}
-			result = append(result, i)
+			result = append(result, i.Copy())
 		}
 	}
 	return result
