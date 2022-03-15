@@ -379,6 +379,10 @@ func (db *DB) load() error {
 			continue
 		}
 		versions := db.listVersions(ext)
+		if len(versions) == 0 {
+			db.dblog.Error().Str("path", extensionRoot).Msg("extension does not have any versions, skipping")
+			continue
+		}
 		for _, version := range versions {
 			versionRoot := VersionDir(db.root, ext, version)
 			db.dblog.Debug().Str("path", versionRoot).Msg("loading version")
