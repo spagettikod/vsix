@@ -24,6 +24,28 @@ var (
 	ErrOutDirNotFound            error = errors.New("output dir does not exist")
 )
 
+func Deduplicate(ers []ExtensionRequest) []ExtensionRequest {
+	result := []ExtensionRequest{}
+	for _, er := range ers {
+		// add the first value
+		if len(result) == 0 {
+			result = append(result, er)
+			continue
+		}
+		found := false
+		for _, er2 := range result {
+			if er.Equals(er2) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result = append(result, er)
+		}
+	}
+	return result
+}
+
 func FetchExtension(uniqueID string) (vscode.Extension, error) {
 	eqr, err := QueryLatestVersionByUniqueID(uniqueID).Run()
 	if err != nil {
@@ -35,6 +57,27 @@ func FetchExtension(uniqueID string) (vscode.Extension, error) {
 		return vscode.Extension{}, err
 	}
 	return eqr.Results[0].Extensions[0], err
+}
+
+func (er ExtensionRequest) HasTargetPlatform(tp string) bool {
+	for _, t := range er.TargetPlatforms {
+		if tp == t {
+			return true
+		}
+	}
+	return false
+}
+
+func (er ExtensionRequest) Equals(er2 ExtensionRequest) bool {
+	if er.UniqueID == er2.UniqueID && er.Version == er2.Version && er.PreRelease == er2.PreRelease {
+		for _, tp := range er2.TargetPlatforms {
+			if !er.HasTargetPlatform(tp) {
+				return false
+			}
+		}
+		return len(er.TargetPlatforms) == len(er2.TargetPlatforms)
+	}
+	return false
 }
 
 func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
