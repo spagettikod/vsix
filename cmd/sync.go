@@ -57,7 +57,10 @@ output but the execution will not stop.`,
 			extensions[i].TargetPlatforms = targetPlatforms
 			extensions[i].PreRelease = preRelease
 		}
+		extensions = marketplace.Deduplicate(extensions)
+		log.Debug().Msgf("found %v extensions to sync in total", len(extensions))
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
+		return
 		db, err := database.OpenFs(out, false)
 		if err != nil {
 			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
