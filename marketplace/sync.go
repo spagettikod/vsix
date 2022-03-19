@@ -41,7 +41,6 @@ func NewFromFile(p string) ([]ExtensionRequest, error) {
 		}
 		ers = append(ers, newErs...)
 	}
-	log.Debug().Msgf("found %v extensions in total", len(ers))
 	return ers, err
 }
 
