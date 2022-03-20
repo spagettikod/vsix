@@ -267,6 +267,22 @@ func (db *DB) VersionExists(uniqueID string, version vscode.Version) bool {
 	return false
 }
 
+// GetVersion returns true and the found version if the given extension and version can be found. It
+// returns false if the extension can not be found.
+func (db *DB) GetVersion(uniqueID string, version vscode.Version) (vscode.Version, bool) {
+	exts := db.FindByUniqueID(false, uniqueID)
+	// if the extensions could not be found the version does not exist
+	if len(exts) == 0 {
+		return vscode.Version{}, false
+	}
+	for _, v := range exts[0].Versions {
+		if v.Equals(version) {
+			return v, true
+		}
+	}
+	return vscode.Version{}, false
+}
+
 // FindByUniqueID returns an array of extensions matching a list of uniqueID's. If keepLatestVersion is true only the latest
 // version is keep of all available version for returned extensions. When false all versions for an extension are included.
 func (db *DB) FindByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vscode.Extension {

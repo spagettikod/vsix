@@ -102,9 +102,13 @@ func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.
 				vlog.Debug().Msg("skipping, unwanted target platform")
 				continue
 			}
-			if db.VersionExists(extension.UniqueID(), v) {
-				vlog.Debug().Msg("skipping, version already exists")
-				continue
+			if existingVersion, found := db.GetVersion(extension.UniqueID(), v); found {
+				// if the new version is no longer in pre-relase state we're replacing
+				// it with the new one
+				if !(existingVersion.IsPreRelease() && !v.IsPreRelease()) {
+					vlog.Debug().Msg("skipping, version already exists")
+					continue
+				}
 			}
 			if err := db.SaveVersionMetadata(extension, v); err != nil {
 				vlog.Err(err).Msg("could not save version to database")
