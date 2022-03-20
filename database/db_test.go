@@ -14,7 +14,7 @@ var (
 		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0"},
 		{UniqueID: "esbenp.prettier-vscode", Version: "9.2.0"},
 		{UniqueID: "__no_real_extension", Version: "0.0.0"},
-		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315"},
+		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315"}, // pre-release
 	}
 	expectedExtensionCount        = 3
 	expectedExtensionVersionCount = 4
@@ -94,14 +94,14 @@ func TestValidateExtensionDB(t *testing.T) {
 	}
 	exts := memdb.List()
 	if len(exts) != expectedExtensionCount {
-		t.Errorf("extected %v extension, got %v", expectedExtensionCount, len(exts))
+		t.Errorf("expected %v extensions, got %v", expectedExtensionCount, len(exts))
 	}
 	versionCount := 0
 	for _, e := range exts {
 		versionCount += len(e.Versions)
 	}
 	if versionCount != expectedExtensionVersionCount {
-		t.Errorf("extected %v extension versions, got %v", expectedExtensionVersionCount, versionCount)
+		t.Errorf("expected %v extensions versions, got %v", expectedExtensionVersionCount, versionCount)
 	}
 }
 
