@@ -208,7 +208,7 @@ func (extReq ExtensionRequest) Download() (vscode.Extension, error) {
 		return vscode.Extension{}, ErrVersionNotFound
 	}
 
-	elog.Debug().Msg("found version at Marketplace")
+	elog.Debug().Str("extension_version", extReq.Version).Msg("found version at Marketplace")
 
 	return ext, nil
 }

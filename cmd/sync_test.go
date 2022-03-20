@@ -21,8 +21,8 @@ var (
 	}
 	expectedDownloadCount         = 4
 	expectedErrorCount            = 1
-	expectedExtensionCount        = 2
-	expectedExtensionVersionCount = 3
+	expectedExtensionCount        = 3
+	expectedExtensionVersionCount = 4
 )
 
 func TestIntegrationTests(t *testing.T) {

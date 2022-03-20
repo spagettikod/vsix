@@ -60,7 +60,6 @@ output but the execution will not stop.`,
 		extensions = marketplace.Deduplicate(extensions)
 		log.Debug().Msgf("found %v extensions to sync in total", len(extensions))
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
-		return
 		db, err := database.OpenFs(out, false)
 		if err != nil {
 			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
@@ -95,7 +94,7 @@ func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.
 		}
 		for _, v := range extension.Versions {
 			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.TargetPlatform).Logger()
-			if !pe.PreRelease && v.IsPreRelease() {
+			if v.IsPreRelease() && !pe.PreRelease && pe.Version == "" {
 				vlog.Debug().Msg("skipping, version is a pre-release")
 				continue
 			}
