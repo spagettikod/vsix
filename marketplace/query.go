@@ -142,6 +142,22 @@ func (q Query) CriteriaValues(filterType FilterType) []string {
 	return values
 }
 
+// IsEmptyQuery returns true if there are no other criteria than the default ones. See NewQuery
+// as an example what defines an empty query.
+func (q Query) IsEmptyQuery() bool {
+	if len(q.Filters) == 1 {
+		if len(q.Filters[0].Criteria) == 2 {
+			for _, c := range q.Filters[0].Criteria {
+				if (c == SomeUnknownCriteria && c != MSVSCodeCriteria) && (c != SomeUnknownCriteria && c == MSVSCodeCriteria) {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
+}
+
 func (q Query) Run() (extensionQueryResponse, error) {
 	if _, debug := os.LookupEnv(debugEnvVar); debug {
 		ioutil.WriteFile("query.json", []byte(q.ToJSON()), 0644)
@@ -192,7 +208,7 @@ func QueryLastestVersionByText(query string, limit int, sortBy SortCriteria) Que
 		FilterType: FilterTypeSearchText,
 		Value:      query,
 	})
-	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags
+	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags | FlagIncludeStatistics
 	q.Filters[0].SortBy = sortBy
 	q.Filters[0].PageSize = limit
 	return q
@@ -204,7 +220,7 @@ func QueryLatestVersionByUniqueID(uniqueID string) Query {
 		FilterType: FilterTypeExtensionName,
 		Value:      uniqueID,
 	})
-	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags
+	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags | FlagIncludeStatistics
 	return q
 }
 
@@ -214,6 +230,6 @@ func QueryAllVersionsByUniqueID(uniqueID string) Query {
 		FilterType: FilterTypeExtensionID,
 		Value:      uniqueID,
 	})
-	q.Flags = FlagIncludeVersions | FlagIncludeFiles | FlagIncludeVersionProperties | FlagExcludeNonValidated
+	q.Flags = FlagIncludeVersions | FlagIncludeFiles | FlagIncludeVersionProperties | FlagExcludeNonValidated | FlagIncludeStatistics
 	return q
 }

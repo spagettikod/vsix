@@ -35,3 +35,14 @@ func TestAddCritera(t *testing.T) {
 		}
 	}
 }
+
+func TestIsEmptyQuery(t *testing.T) {
+	q := NewQuery()
+	if !q.IsEmptyQuery() {
+		t.Error("expected query to be empty")
+	}
+	q.AddCriteria(Criteria{FilterType: FilterTypeSearchText, Value: "test"})
+	if q.IsEmptyQuery() {
+		t.Error("expected query to NOT be empty")
+	}
+}

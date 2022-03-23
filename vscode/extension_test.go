@@ -1,6 +1,9 @@
 package vscode
 
-import "testing"
+import (
+	"sort"
+	"testing"
+)
 
 func Test_ExtensionCopy(t *testing.T) {
 	test := Extension{
@@ -33,5 +36,21 @@ func Test_ExtensionCopy(t *testing.T) {
 			result.Versions[0].Properties[0].Key == "FAIL" &&
 			result.Versions[0].Properties[0].Value == "FAIL") {
 		t.Errorf("expected %v got %v", test, result)
+	}
+}
+
+func TestSort(t *testing.T) {
+	tests := []Extension{
+		{Name: "noInstalls", Statistics: []Statistic{{Name: string(StatisticInstall), Value: 0}}},
+		{Name: "second", Statistics: []Statistic{{Name: string(StatisticInstall), Value: 2}}},
+		{Name: "third", Statistics: []Statistic{{Name: string(StatisticInstall), Value: 3}}},
+		{Name: "mostPopular", Statistics: []Statistic{{Name: string(StatisticInstall), Value: 4}}},
+		{Name: "first", Statistics: []Statistic{{Name: string(StatisticInstall), Value: 1}}},
+	}
+	sort.Sort(ByPopularity(tests))
+	for i, test := range tests {
+		if len(tests)-i-1 != int(test.Statistic(string(StatisticInstall))) {
+			t.Errorf("expected extension %v to have %v installs but got %v", test.Name, len(tests)-i-1, int(test.Statistic(string(StatisticInstall))))
+		}
 	}
 }
