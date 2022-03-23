@@ -65,12 +65,13 @@ output but the execution will not stop.`,
 			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
 		}
 		downloads, loggedErrors := downloadExtensions(extensions, db)
-		log.Info().Str("path", out).Int("downloads", downloads).Int("download_errors", loggedErrors).Msgf("total time for sync %.3fs", time.Since(start).Seconds())
+		dllog := log.With().Str("path", out).Int("downloaded_versions", downloads).Int("sync_errors", loggedErrors).Logger()
+		dllog.Info().Msgf("total time for sync %.3fs", time.Since(start).Seconds())
 		if downloads > 0 {
-			log.Debug().Str("path", out).Int("downloads", downloads).Int("download_errors", loggedErrors).Msg("notifying database")
+			dllog.Debug().Msg("notifying database")
 			err = db.Modified()
 			if err != nil {
-				log.Fatal().Err(err).Str("path", out).Int("downloads", downloads).Int("download_errors", loggedErrors).Msg("could not notify database of extension update")
+				dllog.Fatal().Err(err).Msg("could not notify database of extension update")
 			}
 		}
 		if loggedErrors > 0 {
@@ -80,6 +81,7 @@ output but the execution will not stop.`,
 }
 
 func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.DB) (downloadCount int, errorCount int) {
+	versionDownloadCounter := map[string]bool{}
 	for _, pe := range extensions {
 		extStart := time.Now()
 		extension, err := pe.Download()
@@ -116,20 +118,24 @@ func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.
 			for _, a := range v.Files {
 				b, err := a.Download()
 				if err != nil {
+					errorCount++
 					vlog.Err(err).Str("source", a.Source).Msg("download failed")
 					if err := db.Rollback(extension, v); err != nil {
 						vlog.Err(err).Msg("rollback failed")
 					}
+					continue
 				}
 				if err := db.SaveAssetFile(extension, v, a, b); err != nil {
 					vlog.Err(err).Str("source", a.Source).Msg("could not save asset file")
 					if err := db.Rollback(extension, v); err != nil {
 						vlog.Err(err).Msg("rollback failed")
 					}
+					continue
 				}
+				versionDownloadCounter[pe.UniqueID] = true
 			}
 		}
-		downloadCount++
+		downloadCount = len(versionDownloadCounter)
 		elog.Debug().Msgf("sync took %.3fs", time.Since(extStart).Seconds())
 	}
 	return
