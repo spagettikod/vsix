@@ -1,7 +1,5 @@
 # vsix
-vsix is a CLI for Visual Studio Code Extension Marketplace. The tool can be useful to keep an off line stash of extension, for example in an air gapped environment.
-
-You can keep a folder in sync with the Marketplace by specifying a list of extensions in a text file. These files can then be served internally using the `serve` command.
+Private proxy for Visual Studio Code extensions. It serves extensions locally to your Visual Studio Code clients and keeps requested extensions in sync with the offical Visual Studio Code Marketplace. The tool can be useful for keeping an off line stash of extensions in an air gapped environments.
 
 ## Features
 * [get](#get) a VSIX package from the Marketplace to install locally in VS Code
