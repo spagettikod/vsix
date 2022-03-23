@@ -46,3 +46,14 @@ func TestIsEmptyQuery(t *testing.T) {
 		t.Error("expected query to NOT be empty")
 	}
 }
+
+func TestIsValid(t *testing.T) {
+	q := NewQuery()
+	if !q.IsValid() {
+		t.Error("expected query is not valid, it should be")
+	}
+	q = Query{}
+	if q.IsValid() {
+		t.Error("expected query is valid be it shoudn't be")
+	}
+}
