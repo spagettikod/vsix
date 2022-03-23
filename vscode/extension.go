@@ -47,6 +47,21 @@ type Statistic struct {
 	Value float32 `json:"value"`
 }
 
+type StatisticName string
+
+const (
+	StatisticInstall StatisticName = "install"
+)
+
+// Sort extensions by installs in descending order
+type ByPopularity []Extension
+
+func (a ByPopularity) Len() int      { return len(a) }
+func (a ByPopularity) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByPopularity) Less(i, j int) bool {
+	return a[i].Statistic(string(StatisticInstall)) > a[j].Statistic(string(StatisticInstall))
+}
+
 // Assets return the assets for a certain version of an extension.
 func (e Extension) Assets(version string) ([]Asset, bool) {
 	for _, v := range e.Versions {
@@ -104,6 +119,15 @@ func (e Extension) ExtensionPack() []string {
 		}
 	}
 	return pack
+}
+
+func (e Extension) Statistic(name string) float32 {
+	for _, s := range e.Statistics {
+		if s.Name == name {
+			return s.Value
+		}
+	}
+	return 0
 }
 
 func (e Extension) UniqueID() string {

@@ -361,7 +361,11 @@ func (db *DB) Empty() bool {
 
 // List return all entries in the database.
 func (db *DB) List() []vscode.Extension {
-	return db.items
+	result := []vscode.Extension{}
+	for _, e := range db.items {
+		result = append(result, e.Copy())
+	}
+	return result
 }
 
 // Stats return some statistics about the database.
