@@ -31,9 +31,9 @@ const (
 
 func init() {
 	serveCmd.Flags().StringVarP(&serveDBRoot, "data", "d", ".", "directory where downloaded extensions are stored")
-	serveCmd.Flags().StringVarP(&serveAddr, "addr", "a", "0.0.0.0:8080", "address where the server listens for connections")
-	serveCmd.Flags().StringVarP(&serveCert, "cert", "c", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
-	serveCmd.Flags().StringVarP(&serveKey, "key", "k", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
+	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
+	serveCmd.Flags().StringVar(&serveCert, "cert", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
+	serveCmd.Flags().StringVar(&serveKey, "key", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
 	rootCmd.AddCommand(serveCmd)
 }
 
