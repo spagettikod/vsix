@@ -233,24 +233,18 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 					return
 				}
 
-				// debug print requested query
-				if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
-					headers := ""
-					for k, v := range r.Header {
-						headers = fmt.Sprintf("%s%s: %v\n", headers, k, strings.Join(v, ","))
-					}
-					hlog.FromRequest(r).Debug().Msg(headers)
-					b, err := json.MarshalIndent(query, "", "  ")
-					if err != nil {
-						log.Error().Err(err).Msg("error while logging request query")
-						return
-					}
-					hlog.FromRequest(r).Debug().Msg(string(b))
+				debugRequest(r, query)
+
+				if !query.IsValid() {
+					hlog.FromRequest(r).Info().Msg("query contained in the request is not valid")
+					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+					return
 				}
 
 				results := vscode.NewResults([]vscode.Extension{})
 
 				if query.IsEmptyQuery() {
+					// empty queries sorted by number of installs equates to a @popular query
 					if query.Filters[0].SortBy == marketplace.ByInstallCount {
 						extensions := db.List()
 						sort.Sort(vscode.ByPopularity(extensions))
@@ -282,7 +276,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 					}
 				}
 
-				// remove extensions found in both queries
+				// remove extensions found in multiple queries
 				results.Deduplicate()
 
 				results.SetAssetEndpoint(server + assetRoot)
@@ -301,15 +295,8 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 					return
 				}
 
-				// debug print query results
-				if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
-					b, err := json.MarshalIndent(results, "", "  ")
-					if err != nil {
-						log.Error().Err(err).Msg("error while logging query response")
-						return
-					}
-					hlog.FromRequest(r).Debug().Msg(string(b))
-				}
+				debugResponse(r, results)
+
 			} else {
 				hlog.FromRequest(r).Debug().Msg("incoming request is not application/json, skipping this request")
 			}
@@ -322,4 +309,31 @@ func serverError(w http.ResponseWriter, r *http.Request, err error) {
 		Err(err).
 		Send()
 	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+}
+
+func debugRequest(r *http.Request, query marketplace.Query) {
+	if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
+		headers := ""
+		for k, v := range r.Header {
+			headers = fmt.Sprintf("%s%s: %v\n", headers, k, strings.Join(v, ","))
+		}
+		hlog.FromRequest(r).Debug().Msg(headers)
+		b, err := json.MarshalIndent(query, "", "  ")
+		if err != nil {
+			log.Error().Err(err).Msg("error while logging request query")
+			return
+		}
+		hlog.FromRequest(r).Debug().Msg(string(b))
+	}
+}
+
+func debugResponse(r *http.Request, results vscode.Results) {
+	if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
+		b, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			log.Error().Err(err).Msg("error while logging query response")
+			return
+		}
+		hlog.FromRequest(r).Debug().Msg(string(b))
+	}
 }

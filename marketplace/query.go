@@ -39,6 +39,15 @@ type Filter struct {
 	SortOrder  int          `json:"sortOrder"`
 }
 
+func (f Filter) GetCriteria(filterType FilterType) (Criteria, bool) {
+	for _, c := range f.Criteria {
+		if c.FilterType == filterType {
+			return c, true
+		}
+	}
+	return Criteria{}, false
+}
+
 type Criteria struct {
 	FilterType FilterType `json:"filterType"`
 	Value      string     `json:"value"`
@@ -147,11 +156,22 @@ func (q Query) CriteriaValues(filterType FilterType) []string {
 func (q Query) IsEmptyQuery() bool {
 	if len(q.Filters) == 1 {
 		if len(q.Filters[0].Criteria) == 2 {
-			for _, c := range q.Filters[0].Criteria {
-				if (c == SomeUnknownCriteria && c != MSVSCodeCriteria) && (c != SomeUnknownCriteria && c == MSVSCodeCriteria) {
-					return false
-				}
+			if c, _ := q.Filters[0].GetCriteria(SomeUnknownCriteria.FilterType); c != SomeUnknownCriteria {
+				return false
 			}
+			if c, _ := q.Filters[0].GetCriteria(MSVSCodeCriteria.FilterType); c != MSVSCodeCriteria {
+				return false
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// IsValid return true if the query contain all necessary items and values to be regarded as a valid query.
+func (q Query) IsValid() bool {
+	for _, f := range q.Filters {
+		if c, _ := f.GetCriteria(MSVSCodeCriteria.FilterType); c == MSVSCodeCriteria {
 			return true
 		}
 	}
