@@ -296,7 +296,7 @@ func (db *DB) FindByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vsco
 	for _, i := range db.items {
 		if queryMap[i.UniqueID()] {
 			if keepLatestVersion {
-				i = i.KeepVersions(i.LatestVersion())
+				i = i.KeepVersions(i.LatestVersion(true))
 			}
 			result = append(result, i.Copy())
 		}
@@ -315,7 +315,7 @@ func (db *DB) FindByExtensionID(keepLatestVersion bool, ids ...string) []vscode.
 	for _, i := range db.items {
 		if queryMap[i.ID] {
 			if keepLatestVersion {
-				i = i.KeepVersions(i.LatestVersion())
+				i = i.KeepVersions(i.LatestVersion(true))
 			}
 			result = append(result, i.Copy())
 		}
@@ -337,7 +337,7 @@ func (db *DB) Search(keepLatestVersion bool, text ...string) []vscode.Extension 
 	for _, i := range db.items {
 		if multiContains(i.Name, text...) || multiContains(i.DisplayName, text...) || multiContains(i.Publisher.Name, text...) || multiContains(i.ShortDescription, text...) {
 			if keepLatestVersion {
-				i = i.KeepVersions(i.LatestVersion())
+				i = i.KeepVersions(i.LatestVersion(true))
 			}
 			result = append(result, i.Copy())
 		}

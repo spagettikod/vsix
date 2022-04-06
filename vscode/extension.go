@@ -100,8 +100,8 @@ func (e Extension) IsExtensionPack() bool {
 	return len(e.ExtensionPack()) > 0
 }
 
-func (e Extension) IsMultiPlatform() bool {
-	v, _ := e.Version(e.LatestVersion())
+func (e Extension) IsMultiPlatform(preRelease bool) bool {
+	v, _ := e.Version(e.LatestVersion(preRelease))
 	if len(v) > 1 {
 		return v[0].TargetPlatform != ""
 	}
@@ -110,12 +110,9 @@ func (e Extension) IsMultiPlatform() bool {
 
 func (e Extension) ExtensionPack() []string {
 	pack := []string{}
-	for _, p := range e.Versions[0].Properties {
-		if p.Key == propKeyExtensionPack {
-			if len(p.Value) > 0 {
-				pack = strings.Split(p.Value, ",")
-			}
-			break
+	if len(e.Versions) > 0 {
+		if packages, found := e.Versions[0].GetProperty(propKeyExtensionPack); found && packages.Value != "" {
+			pack = strings.Split(packages.Value, ",")
 		}
 	}
 	return pack
@@ -183,8 +180,16 @@ func (e Extension) String() string {
 }
 
 // LatestVersion returns the latest version number for the extension with the given unique ID.
-func (e Extension) LatestVersion() string {
-	return e.Versions[0].Version
+func (e Extension) LatestVersion(preRelease bool) string {
+	if preRelease {
+		return e.Versions[0].Version
+	}
+	for _, v := range e.Versions {
+		if !v.IsPreRelease() {
+			return v.Version
+		}
+	}
+	return ""
 }
 
 func (e Extension) Version(version string) ([]Version, bool) {

@@ -42,7 +42,7 @@ given version does not exist.`,
 }
 
 func get(pe marketplace.ExtensionRequest) {
-	if err := pe.DownloadVSIXPackage(out); err != nil {
+	if err := pe.DownloadVSIXPackage(out, true); err != nil {
 		fmt.Printf("%s: %s\n", pe, err)
 		os.Exit(1)
 	}

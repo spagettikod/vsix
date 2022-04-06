@@ -17,13 +17,23 @@ var (
 		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0"},
 		{UniqueID: "esbenp.prettier-vscode", Version: "9.2.0"},
 		{UniqueID: "__no_real_extension", Version: "0.0.0"},
-		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315"}, // pre-release
+		// pre-release and an extension pack, will result in also downloading ms-vscode-remote.remote-ssh-edit
+		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315", PreRelease: true},
 	}
 	expectedDownloadCount         = 4
 	expectedErrorCount            = 1
-	expectedExtensionCount        = 3
-	expectedExtensionVersionCount = 4
+	expectedExtensionCount        = 4
+	expectedExtensionVersionCount = 5
 )
+
+func getTestExtensionRequest(uniqueID string) (marketplace.ExtensionRequest, bool) {
+	for _, te := range testExtensions {
+		if te.UniqueID == uniqueID {
+			return te, true
+		}
+	}
+	return marketplace.ExtensionRequest{}, false
+}
 
 func TestIntegrationTests(t *testing.T) {
 	if testing.Short() {
@@ -37,7 +47,7 @@ func TestIntegrationTests(t *testing.T) {
 	}
 
 	// download extensions to test database
-	downloads, errors := downloadExtensions(testExtensions, memdb)
+	downloads, errors := downloadExtensions(testExtensions, []string{"linux-x64"}, true, memdb)
 	if errors != expectedErrorCount {
 		fmt.Printf("expected %v error, got %v\n", expectedErrorCount, errors)
 		os.Exit(-1)
@@ -93,8 +103,10 @@ func TestDump(t *testing.T) {
 	}
 	exts := memdb.List()
 	for _, ext := range exts {
-		if !isTestExtension(ext, ext.LatestVersion()) {
-			t.Errorf("found %v %v, which is not part of expected extensions", ext.UniqueID(), ext.LatestVersion())
+		if testReq, found := getTestExtensionRequest(ext.UniqueID()); found {
+			if !isTestExtension(ext, ext.LatestVersion(testReq.PreRelease)) {
+				t.Errorf("found %v %v, which is not part of expected extensions", ext.UniqueID(), ext.LatestVersion(testReq.PreRelease))
+			}
 		}
 	}
 }
@@ -112,8 +124,12 @@ func TestFindByUniqueID(t *testing.T) {
 		t.Errorf("extected %v extension versions, got %v", 2, len(e[0].Versions))
 	}
 
-	if e[0].LatestVersion() != "9.3.0" {
-		t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].LatestVersion())
+	if testReq, found := getTestExtensionRequest(e[0].UniqueID()); found {
+		if e[0].LatestVersion(testReq.PreRelease) != "9.3.0" {
+			t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].LatestVersion(testReq.PreRelease))
+		}
+	} else {
+		t.Errorf("could not find extension %v, among extensions in the test", e[0].UniqueID())
 	}
 
 	e = memdb.FindByUniqueID(true, "esbenp.prettier-vscode")
@@ -143,8 +159,12 @@ func TestFindByExtensionID(t *testing.T) {
 		t.Errorf("extected %v extension versions, got %v", 1, len(e[0].Versions))
 	}
 
-	if e[0].LatestVersion() != "0.31.1" {
-		t.Errorf("extected extension version %v, got %v", "0.31.1", e[0].LatestVersion())
+	if testReq, found := getTestExtensionRequest(e[0].UniqueID()); found {
+		if e[0].LatestVersion(testReq.PreRelease) != "0.31.1" {
+			t.Errorf("extected extension version %v, got %v", "0.31.1", e[0].LatestVersion(testReq.PreRelease))
+		}
+	} else {
+		t.Errorf("could not find extension %v, among extensions in the test", e[0].UniqueID())
 	}
 
 	if e[0].UniqueID() != "golang.Go" {
@@ -160,8 +180,12 @@ func TestFindByExtensionID(t *testing.T) {
 		t.Errorf("extected %v extension versions, got %v", 1, len(e[0].Versions))
 	}
 
-	if e[0].LatestVersion() != "0.31.1" {
-		t.Errorf("extected extension version %v, got %v", "0.31.1", e[0].LatestVersion())
+	if testReq, found := getTestExtensionRequest(e[0].UniqueID()); found {
+		if e[0].LatestVersion(testReq.PreRelease) != "0.31.1" {
+			t.Errorf("extected extension version %v, got %v", "0.31.1", e[0].LatestVersion(testReq.PreRelease))
+		}
+	} else {
+		t.Errorf("could not find extension %v, among extensions in the test", e[0].UniqueID())
 	}
 
 	if e[0].UniqueID() != "golang.Go" {
@@ -205,8 +229,12 @@ func TestSearch(t *testing.T) {
 		t.Errorf("extected %v extension versions, got %v", 2, len(e[0].Versions))
 	}
 
-	if e[0].LatestVersion() != "9.3.0" {
-		t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].LatestVersion())
+	if testReq, found := getTestExtensionRequest(e[0].UniqueID()); found {
+		if e[0].LatestVersion(testReq.PreRelease) != "9.3.0" {
+			t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].LatestVersion(testReq.PreRelease))
+		}
+	} else {
+		t.Errorf("could not find extension %v, among extensions in the test", e[0].UniqueID())
 	}
 
 	e = memdb.Search(true, "Code formatter")

@@ -53,10 +53,6 @@ output but the execution will not stop.`,
 		if len(extensions) == 0 {
 			log.Fatal().Msgf("no extensions found at path '%s', exiting", args[0])
 		}
-		for i := range extensions {
-			extensions[i].TargetPlatforms = targetPlatforms
-			extensions[i].PreRelease = preRelease
-		}
 		extensions = marketplace.Deduplicate(extensions)
 		log.Debug().Msgf("found %v extensions to sync in total", len(extensions))
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
@@ -64,7 +60,7 @@ output but the execution will not stop.`,
 		if err != nil {
 			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
 		}
-		downloads, loggedErrors := downloadExtensions(extensions, db)
+		downloads, loggedErrors := downloadExtensions(extensions, targetPlatforms, preRelease, db)
 		dllog := log.With().Str("path", out).Int("downloaded_versions", downloads).Int("sync_errors", loggedErrors).Logger()
 		dllog.Info().Msgf("total time for sync %.3fs", time.Since(start).Seconds())
 		if downloads > 0 {
@@ -80,17 +76,32 @@ output but the execution will not stop.`,
 	},
 }
 
-func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.DB) (downloadCount int, errorCount int) {
+func downloadExtensions(extensions []marketplace.ExtensionRequest, targetPlatforms []string, preRelease bool, db *database.DB) (downloadCount int, errorCount int) {
 	versionDownloadCounter := map[string]bool{}
 	for _, pe := range extensions {
 		extStart := time.Now()
-		extension, err := pe.Download()
+		pe.PreRelease = preRelease
+		pe.TargetPlatforms = targetPlatforms
+		extension, err := pe.Download(preRelease)
 		if err != nil {
 			log.Error().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Err(err).Msg("unexpected error occured while syncing")
 			errorCount++
 			continue
 		}
+
 		elog := log.With().Str("unique_id", extension.UniqueID()).Logger()
+
+		if extension.IsExtensionPack() {
+			elog.Info().Msg("is extension pack, getting pack contents")
+			content := []marketplace.ExtensionRequest{}
+			for _, pack := range extension.ExtensionPack() {
+				content = append(content, marketplace.ExtensionRequest{UniqueID: pack})
+			}
+			dc, ec := downloadExtensions(content, targetPlatforms, preRelease, db)
+			downloadCount += dc
+			errorCount += ec
+		}
+
 		if err := db.SaveExtensionMetadata(extension); err != nil {
 			elog.Err(err).Msg("could not save extension to database")
 		}
@@ -132,7 +143,7 @@ func downloadExtensions(extensions []marketplace.ExtensionRequest, db *database.
 					}
 					continue
 				}
-				versionDownloadCounter[pe.UniqueID] = true
+				versionDownloadCounter[pe.UniqueID+v.Version] = true
 			}
 		}
 		downloadCount = len(versionDownloadCounter)
