@@ -27,6 +27,9 @@ var (
 func Deduplicate(ers []ExtensionRequest) []ExtensionRequest {
 	result := []ExtensionRequest{}
 	for _, er := range ers {
+		if er.UniqueID == "" {
+			continue
+		}
 		// add the first value
 		if len(result) == 0 {
 			result = append(result, er)
@@ -103,7 +106,7 @@ func (pe ExtensionRequest) String() string {
 
 // rewrite this, half the code is the same as Download, recursive function complicates things,
 // maybe rethink the entire setup?
-func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
+func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) error {
 	elog := log.With().Str("extension", pe.UniqueID).Str("dir", root).Logger()
 
 	elog.Debug().Msg("only VSIXPackage will be fetched")
@@ -121,7 +124,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 		elog.Info().Msg("is extension pack, getting pack contents")
 		for _, pack := range ext.ExtensionPack() {
 			erPack := ExtensionRequest{UniqueID: pack}
-			err := erPack.DownloadVSIXPackage(root)
+			err := erPack.DownloadVSIXPackage(root, preRelease)
 			if err != nil {
 				return err
 			}
@@ -130,7 +133,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 
 	if pe.Version == "" {
 		elog.Debug().Msg("version was not specified, setting to latest version")
-		pe.Version = ext.LatestVersion()
+		pe.Version = ext.LatestVersion(preRelease)
 	}
 	if _, found := ext.Version(pe.Version); !found {
 		return ErrVersionNotFound
@@ -139,7 +142,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 
 	elog.Debug().Msg("version has been determined")
 
-	if ext.IsMultiPlatform() {
+	if ext.IsMultiPlatform(preRelease) {
 		return ErrMultiplatformNotSupported
 	}
 
@@ -172,7 +175,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string) error {
 // Download will fetch the extension all its assets making it ready to be
 // served by the serve command. It returns true if download succeeded and
 // false if the requested version already exists at output.
-func (extReq ExtensionRequest) Download() (vscode.Extension, error) {
+func (extReq ExtensionRequest) Download(preRelease bool) (vscode.Extension, error) {
 	elog := log.With().Str("extension", extReq.UniqueID).Str("extension_version", extReq.Version).Logger()
 
 	elog.Debug().Msg("searching for extension at Marketplace")
@@ -181,24 +184,10 @@ func (extReq ExtensionRequest) Download() (vscode.Extension, error) {
 		return vscode.Extension{}, err
 	}
 
-	// TODO ms-vscode-remote.vscode-remote-extensionpack seems to have a VSIX-file, does this mean
-	// we don't have to download all extensions? If we need to download all extensions how do
-	// we know which version?
-	// if ext.IsExtensionPack() {
-	// 	elog.Info().Msg("is extension pack, getting pack contents")
-	// 	for _, pack := range ext.ExtensionPack() {
-	// 		erPack := ExtensionRequest{UniqueID: pack}
-	// 		_, err := erPack.Download(db)
-	// 		if err != nil {
-	// 			return false, err
-	// 		}
-	// 	}
-	// }
-
 	// set version to the latest since no version was given in the request
 	if extReq.Version == "" {
 		elog.Debug().Msg("version was not specified, setting to latest version")
-		extReq.Version = ext.LatestVersion()
+		extReq.Version = ext.LatestVersion(preRelease)
 	}
 
 	// only keep the version from the request

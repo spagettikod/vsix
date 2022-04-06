@@ -14,6 +14,7 @@ import (
 func init() {
 	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "limit number of results")
 	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install")
+	searchCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions")
 	rootCmd.AddCommand(searchCmd)
 }
 
@@ -51,7 +52,7 @@ var searchCmd = &cobra.Command{
 				extData = append(extData, ext.DisplayName)
 			}
 			extData = append(extData, ext.Publisher.DisplayName)
-			extData = append(extData, ext.LatestVersion())
+			extData = append(extData, ext.LatestVersion(preRelease))
 			extData = append(extData, ext.LastUpdated.Format(time.RFC3339))
 			extData = append(extData, fmt.Sprint(ext.InstallCount()))
 			avg := ext.AverageRating()

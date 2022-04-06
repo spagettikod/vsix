@@ -48,6 +48,9 @@ func TestDeduplicate(t *testing.T) {
 		{
 			UniqueID: "ms-vscode.cpptools",
 		},
+		{
+			UniqueID: "", // empty items should be removed
+		},
 	}
 	result := Deduplicate(tests)
 	if len(result) != 3 {

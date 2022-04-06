@@ -12,6 +12,7 @@ import (
 )
 
 func init() {
+	infoCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions")
 	rootCmd.AddCommand(infoCmd)
 }
 
@@ -40,7 +41,7 @@ Extension pack:       %s
 %s
 
 `
-		version, _ := ext.Version(ext.LatestVersion())
+		version, _ := ext.Version(ext.LatestVersion(preRelease))
 		targetPlatforms := []string{}
 		if len(version) == 1 && version[0].TargetPlatform == "" {
 			targetPlatforms = []string{"Universal"}
@@ -52,7 +53,7 @@ Extension pack:       %s
 		fmt.Printf(s,
 			ext.Name,
 			ext.Publisher.DisplayName,
-			ext.LatestVersion(),
+			ext.LatestVersion(preRelease),
 			version[0].IsPreRelease(),
 			strings.Join(targetPlatforms, "\n                  "),
 			ext.ReleaseDate.Format("2006-01-02 15:04 UTC"),
