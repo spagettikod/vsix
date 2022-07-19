@@ -105,6 +105,16 @@ If you don't run your own DNS you will have to modify your Visual Studio Code co
       ```
 1. Restart Visual Studio Code and start using extensions from your own marketplace.
 
+## Commands
+Besides serving your offline marketplace vsix has some useful commands to interact with the offical Visual Studo Marketplace and to interact with your marketplace "database".
+
+### `dump`
+Prints all extensions found in the "database" at the given path.
+
+```bash
+$ docker run --rm -it -v $(pwd):/data spagettikod/vsix get golang.Go
+```
+
 ### `get`
 Get will download the extension from the Marketplace. Extension identifier
 can be found on the Visual Studio Code Marketplace web page for a given extension
