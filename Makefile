@@ -1,8 +1,8 @@
-VERSION=2.3.0
+VERSION=2.2.1
 OUTPUT=_pkg
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
 
-default: all
+default: test
 
 clean:
 	@rm -rf $(OUTPUT)
@@ -35,4 +35,4 @@ pkg_docker:
 # @docker buildx create --use
 	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
 
-all: clean test pkg_linux pkg_macos
+all: clean test pkg_linux pkg_macos pkg_docker

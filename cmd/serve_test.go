@@ -1,8 +1,33 @@
 package cmd
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/spagettikod/vsix/database"
 )
+
+func TestCORSQuery(t *testing.T) {
+	expectedHeaders := "test,hepp"
+
+	memdb, err := database.OpenMem()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodOptions, "https://www.foo.bar/testing", nil)
+	req.Header.Add("Access-Control-Request-Headers", expectedHeaders)
+	rec := httptest.NewRecorder()
+	handler := queryHandler(memdb, "https://www.foo.bar", "/testing")
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %v but got %v", http.StatusOK, rec.Code)
+	}
+	if rec.Header().Get("Access-Control-Allow-Headers") != expectedHeaders {
+		t.Fatalf("expected header 'Access-Control-Allow-Headers: %s' but got 'Access-Control-Allow-Headers: %s'", expectedHeaders, rec.Header().Get("Access-Control-Allow-Headers"))
+	}
+}
 
 func Test_URLParse(t *testing.T) {
 	type Test struct {

@@ -215,7 +215,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 
 		switch r.Method {
 		case http.MethodOptions:
-			w.Header().Set("Access-Control-Allow-Headers", "x-market-user-id,x-market-client-id,content-type")
+			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
 			return
 		case http.MethodPost:
 			if strings.Index(r.Header.Get("Content-Type"), "application/json") == 0 {
