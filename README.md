@@ -1,13 +1,5 @@
 # vsix
-Private proxy for Visual Studio Code extensions. It serves extensions locally to your Visual Studio Code clients and keeps requested extensions in sync with the offical Visual Studio Code Marketplace. The tool can be useful for keeping an off line stash of extensions in an air gapped environments.
-
-## Features
-* [get](#get) a VSIX package from the Marketplace to install locally in VS Code
-* [search](#search) for extensions by name
-* keep folder in [sync](#sync) with the marketplace
-* [serve](#serve) downloaded extensions locally
-* list available extension [versions](#versions)
-* display extension [information](#info) 
+Private proxy for Visual Studio Code extensions. It serves extensions locally to your Visual Studio Code clients and keeps requested extensions in sync with the offical Visual Studio Code Marketplace. The tool can be useful for keeping an off line stash of extensions in air gapped environments.     
 
 ## Installation
 vsix is distributed as a single binary file. The current release support the operating systems
@@ -30,25 +22,98 @@ docker run --rm -it \
 ```
 
 ### macOS
-This will install the latest version on macOS running on Intel.
+This will install the latest version on macOS running on Apple Silicon.
 
 ```
-curl -OL https://github.com/spagettikod/vsix/releases/download/v1.0.0/vsix1.0.0.macos-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix1.0.0.macos-amd64.tar.gz
+curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.macos-arm64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix2.2.0.macos-arm64.tar.gz
 ```
 
 ### Linux
 This will install the latest version on many Linux distros as long as you have curl installed.
 
 ```
-curl -OL https://github.com/spagettikod/vsix/releases/download/v1.0.0/vsix1.0.0.linux-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix1.0.0.linux-amd64.tar.gz
+curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.linux-amd64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix2.2.0.linux-amd64.tar.gz
 ```
 
 ## Usage
 Most commands rely on knowing the "Unique Identifier" for a package. This identifier can be found in the "More Info" section on the Marketplace web page for an extension, for example [the Go extension](https://marketplace.visualstudio.com/items?itemName=golang.Go). It is also visible when running the `search` command.
 
 There is build in documentation in the tool itself by running `vsix <command> --help`.
+
+## Running your local Marketplace
+By syncing extensions from the official maketplace and hosting your own marketplace you can run a local proxy with extensions. To achieve this we will do the following:
+
+1. Setup sync with the official marketplace
+1. Start a local marketplace server
+1. Point Visual Studio Code to your server
+
+All examples will use Docker but you can easily replace this with your specific platform build.
+
+### Setup sync with the official marketplace
+To have something to serve from your local marketplace we first need to fetch some extensions from the official marketplace.
+
+1. Start by creating a folder somewhere where the "database" is stored.
+      ```
+      mkdir data
+      ```
+1. Create a file with extensions to be synced, let's call it `extensions` and add some extensions. Here we fetch the latest versions of the Go and Java extensions, where Java is actually an extension pack with multiple extensions.
+      ```
+      golang.Go
+      vscjava.vscode-java-pack
+      ```
+1. Synchronize your "database" with the marketplace. In this example we will run it once but in a real setup you'll want to use cron to run at regular intervals to always have the latest versions. \
+The example below won't load pre-release versions of extensions, add the `--pre-release` flag to the command to fetch pre-release versions.
+      ```
+      docker run \
+            -v $(pwd)/data:/data
+            -v $(pwd)/extensions:/extensions
+            spagettikod/vsix -o /data --platforms linux-x86,darwin-arm64 /extensions
+      ```
+
+### Start a local marketplace server
+Now that you've setup synchronization and have some nice extensions in your "database" you'll want to serve them to your Visual Studio Code editor.
+
+Although you can serve a marketplace without TLS I recommend fetching a server certificate from [Let's Encrypt](https://letsencrypt.org/). There's a nice client called [Lego](https://github.com/go-acme/lego) I like to use.
+
+The vsix Docker image will automatically run the `serve` sub command if no other parameters are given. It will run `serve` pointing the "database" to `/data` and the server certificate and key to files named `/server.crt` and `/server.key`. So all you have to do is bind mount those files.
+
+You will also need to specify the endpoint where extensions and assets can be downloaded from, for example `https://vsix.myserver.com/extensions`. If you run your own DNS and hijack the offical domain this should say `https://marketplace.visualstudio.com/_apis/public/gallery`.
+
+```
+docker run -d \
+      -v $(pwd)/data:/data
+      -v <PATH TO YOUR CERTIFICATE>:/server.cert:ro
+      -v <PATH TO YOUR KEY>:/server.key:ro
+      -e VSIX_EXTERNAL_URL=<YOUR SERVER ENDPOINT>
+      spagettikod/vsix
+```
+
+### Point Visual Studio Code to your server
+If you run your own DNS and hijack `marketplace.visualstudio.com` you are set to go and won't need to modify Visual Studio Code to use your own marketplace proxy.
+
+If you don't run your own DNS you will have to modify your Visual Studio Code configuration.
+1. Open `product.json`. On macOS (if Visual Studio Code is installed in the Applications folder) this file is located at `/Applications/Visual Studio Code.app/Contents/Resources/app/product.json`.
+1. Find the `extensionGallery` block and edit the `serviceUrl` to point to your server. For example, using the example above `https://vsix.myserver.com/extensions`:
+      ```json
+      ...
+      "extensionsGallery": {
+		"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery",
+	},
+      ...
+      ```
+1. Restart Visual Studio Code and start using extensions from your own marketplace.
+
+## Commands
+Besides serving your offline marketplace vsix has some useful commands to interact with the offical Visual Studo Marketplace and to interact with your marketplace "database".
+
+### `dump`
+Prints all extensions found in the "database" at the given path.
+
+```bash
+$ docker run --rm -it -v $(pwd):/data spagettikod/vsix get golang.Go
+```
 
 ### `get`
 Get will download the extension from the Marketplace. Extension identifier
