@@ -174,7 +174,7 @@ func assetHandler(db *database.DB, assetURLPath string) http.Handler {
 
 		switch r.Method {
 		case http.MethodOptions:
-			w.Header().Set("Access-Control-Allow-Headers", "x-market-user-id,x-market-client-id")
+			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
 		case http.MethodGet:
 			hlog.FromRequest(r).Debug().Msgf("extracting filename from path: %s", r.URL.Path)
 			// assemble filename from request URL
