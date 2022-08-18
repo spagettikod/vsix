@@ -46,6 +46,10 @@ func NewResults(exts []Extension) Results {
 	}
 }
 
+func (r Results) AddExtensions(exts []Extension) {
+	r.Results[0].Extensions = append(r.Results[0].Extensions, exts...)
+}
+
 func (r Results) Deduplicate() {
 	for _, result := range r.Results {
 		notExist := map[string]bool{}
