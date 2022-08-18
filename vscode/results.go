@@ -25,18 +25,18 @@ type MetadataItem struct {
 	Count int    `json:"count"`
 }
 
-func NewResults(exts []Extension) Results {
+func NewResults() Results {
 	return Results{
 		Results: []*Result{
 			{
-				Extensions: exts,
+				Extensions: []Extension{},
 				ResultMetadata: []ResultMetadata{
 					{
 						MetadataType: "ResultCount",
 						MetadataItems: []MetadataItem{
 							{
 								Name:  "TotalCount",
-								Count: len(exts),
+								Count: 0,
 							},
 						},
 					},
@@ -47,24 +47,21 @@ func NewResults(exts []Extension) Results {
 }
 
 func (r Results) AddExtensions(exts []Extension) {
-	r.Results[0].Extensions = append(r.Results[0].Extensions, exts...)
+	for _, e := range exts {
+		if !r.Contains(e) {
+			r.Results[0].Extensions = append(r.Results[0].Extensions, e)
+		}
+	}
+	r.Results[0].ResultMetadata[0].MetadataItems[0].Count = len(r.Results[0].Extensions)
 }
 
-func (r Results) Deduplicate() {
-	for _, result := range r.Results {
-		notExist := map[string]bool{}
-		dedup := []Extension{}
-		for _, i := range result.Extensions {
-			notExist[i.ID] = true
+func (r Results) Contains(e Extension) bool {
+	for _, e1 := range r.Results[0].Extensions {
+		if e1.ID == e.ID {
+			return true
 		}
-		for _, i := range result.Extensions {
-			if notExist[i.ID] {
-				dedup = append(dedup, i)
-				notExist[i.ID] = false
-			}
-		}
-		result.Extensions = dedup
 	}
+	return false
 }
 
 func (r Results) SetAssetEndpoint(assetEndpoint string) {
