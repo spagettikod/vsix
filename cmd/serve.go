@@ -241,7 +241,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 					return
 				}
 
-				results := vscode.NewResults([]vscode.Extension{})
+				results := vscode.NewResults()
 
 				if query.IsEmptyQuery() {
 					// empty queries sorted by number of installs equates to a @popular query
@@ -275,9 +275,6 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 						results.AddExtensions(extensions)
 					}
 				}
-
-				// remove extensions found in multiple queries
-				results.Deduplicate()
 
 				results.SetAssetEndpoint(server + assetRoot)
 
