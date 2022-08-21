@@ -345,6 +345,60 @@ func (db *DB) Search(keepLatestVersion bool, text ...string) []vscode.Extension 
 	return result
 }
 
+// Run will execute all aspects of a marketplace.Query against the database. This includes
+// querying, sorting, limiting and paging.
+func (db *DB) Run(q marketplace.Query) (vscode.Results, error) {
+	res := vscode.NewResults()
+
+	extensions := []vscode.Extension{}
+
+	if !q.IsValid() {
+		return res, marketplace.ErrInvalidQuery
+	}
+
+	if q.IsEmptyQuery() {
+		// empty queries sorted by number of installs equates to a @popular query
+		extensions = append(extensions, db.List(q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly))...)
+	} else {
+		uniqueIDs := q.CriteriaValues(marketplace.FilterTypeExtensionName)
+		if len(uniqueIDs) > 0 {
+			db.dblog.Debug().Msgf("found array of extension names in query: %v", uniqueIDs)
+			extensions = append(extensions, db.FindByUniqueID(q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), uniqueIDs...)...)
+			db.dblog.Debug().Msgf("extension name database query found %v extension", len(extensions))
+		}
+
+		searchValues := q.CriteriaValues(marketplace.FilterTypeSearchText)
+		if len(searchValues) > 0 {
+			db.dblog.Debug().Msgf("found text searches in query: %v", searchValues)
+			extensions = append(extensions, db.Search(q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), searchValues...)...)
+			db.dblog.Debug().Msgf("free text database query found %v extension", len(extensions))
+		}
+
+		extIDs := q.CriteriaValues(marketplace.FilterTypeExtensionID)
+		if len(extIDs) > 0 {
+			db.dblog.Debug().Msgf("found array of extension identifiers in query: %v", extIDs)
+			extensions = append(extensions, db.FindByExtensionID(q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), extIDs...)...)
+			db.dblog.Debug().Msgf("extension identifier database query found %v extension", len(extensions))
+		}
+	}
+
+	// set total count to all extensions found, before some might be removed if paginated
+	res.SetTotalCount(len(extensions))
+
+	// sort the result
+	switch q.SortBy() {
+	case marketplace.ByInstallCount:
+		sort.Sort(vscode.ByPopularity(extensions))
+	}
+
+	// TODO pagination
+
+	// add sorted and paginated extensions to the result
+	res.AddExtensions(extensions)
+
+	return res, nil
+}
+
 // String dumps the entire database as a JSON string.
 func (db *DB) String() string {
 	b, err := json.MarshalIndent(db.items, "", "   ")
@@ -360,9 +414,12 @@ func (db *DB) Empty() bool {
 }
 
 // List return all entries in the database.
-func (db *DB) List() []vscode.Extension {
+func (db *DB) List(keepLatestVersion bool) []vscode.Extension {
 	result := []vscode.Extension{}
 	for _, e := range db.items {
+		if keepLatestVersion {
+			e = e.KeepVersions(e.LatestVersion(true))
+		}
 		result = append(result, e.Copy())
 	}
 	return result

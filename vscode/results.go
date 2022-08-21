@@ -46,13 +46,16 @@ func NewResults() Results {
 	}
 }
 
+func (r Results) SetTotalCount(v int) {
+	r.Results[0].ResultMetadata[0].MetadataItems[0].Count = v
+}
+
 func (r Results) AddExtensions(exts []Extension) {
 	for _, e := range exts {
 		if !r.Contains(e) {
 			r.Results[0].Extensions = append(r.Results[0].Extensions, e)
 		}
 	}
-	r.Results[0].ResultMetadata[0].MetadataItems[0].Count = len(r.Results[0].Extensions)
 }
 
 func (r Results) Contains(e Extension) bool {

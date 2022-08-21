@@ -84,7 +84,7 @@ func TestValidateExtensionDB(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration tests when -test.short")
 	}
-	exts := memdb.List()
+	exts := memdb.List(false)
 	if len(exts) != expectedExtensionCount {
 		t.Errorf("expected %v extensions, got %v", expectedExtensionCount, len(exts))
 	}
@@ -101,7 +101,7 @@ func TestDump(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration tests when -test.short")
 	}
-	exts := memdb.List()
+	exts := memdb.List(false)
 	for _, ext := range exts {
 		if testReq, found := getTestExtensionRequest(ext.UniqueID()); found {
 			if !isTestExtension(ext, ext.LatestVersion(testReq.PreRelease)) {

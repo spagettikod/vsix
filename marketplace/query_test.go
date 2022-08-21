@@ -1,6 +1,7 @@
 package marketplace
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -56,4 +57,20 @@ func TestIsValid(t *testing.T) {
 	if q.IsValid() {
 		t.Error("expected query is valid be it shoudn't be")
 	}
+}
+
+func TestFlag(t *testing.T) {
+	var f QueryFlag
+	f = 950
+	fmt.Printf("%v - FlagExcludeNonValidated: %v\n", f, f.Is(FlagExcludeNonValidated))
+	fmt.Printf("%v - FlagIncludeAssetURI: %v\n", f, f.Is(FlagIncludeAssetURI))
+	fmt.Printf("%v - FlagIncludeCatergoryAndTags: %v\n", f, f.Is(FlagIncludeCatergoryAndTags))
+	fmt.Printf("%v - FlagIncludeFiles: %v\n", f, f.Is(FlagIncludeFiles))
+	fmt.Printf("%v - FlagIncludeInstallationTargets: %v\n", f, f.Is(FlagIncludeInstallationTargets))
+	fmt.Printf("%v - FlagIncludeLatestVersionOnly: %v\n", f, f.Is(FlagIncludeLatestVersionOnly))
+	fmt.Printf("%v - FlagIncludeSharedAccounts: %v\n", f, f.Is(FlagIncludeSharedAccounts))
+	fmt.Printf("%v - FlagIncludeStatistics: %v\n", f, f.Is(FlagIncludeStatistics))
+	fmt.Printf("%v - FlagIncludeVersionProperties: %v\n", f, f.Is(FlagIncludeVersionProperties))
+	fmt.Printf("%v - FlagIncludeVersions: %v\n", f, f.Is(FlagIncludeVersions))
+	fmt.Printf("%v - FlagUnpublished: %v\n", f, f.Is(FlagUnpublished))
 }
