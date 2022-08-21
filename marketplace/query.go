@@ -59,8 +59,8 @@ type FilterType int
 const (
 	ByNone          SortCriteria = 0
 	ByName          SortCriteria = 2
-	ByPublishedDate SortCriteria = 5
 	ByInstallCount  SortCriteria = 4
+	ByPublishedDate SortCriteria = 10
 	ByRating        SortCriteria = 12
 
 	FlagIncludeVersions            QueryFlag = 0x1
@@ -91,6 +91,7 @@ var (
 	SomeUnknownCriteria       = Criteria{FilterType: 12, Value: "4096"}
 	ErrExtensionNotFound      = errors.New("extension could not be found at Marketplace")
 	ErrExtensionHasNoVersions = errors.New("extension has no versions")
+	ErrInvalidQuery           = errors.New("query is not valid, it might be incomplete or malformatted")
 )
 
 var latestVersionQueryTemplate2 = Filter{
@@ -109,7 +110,7 @@ type extensionQueryResponse struct {
 type QueryFlag int
 
 func (f QueryFlag) Is(f2 QueryFlag) bool {
-	return (f2 & f) == f
+	return (f2 & f) == f2
 }
 
 func NewQuery() Query {
@@ -220,6 +221,10 @@ func (q Query) Run() (extensionQueryResponse, error) {
 func (q Query) ToJSON() string {
 	qjson, _ := json.Marshal(q)
 	return string(qjson)
+}
+
+func (q Query) SortBy() SortCriteria {
+	return q.Filters[0].SortBy
 }
 
 func QueryLastestVersionByText(query string, limit int, sortBy SortCriteria) Query {

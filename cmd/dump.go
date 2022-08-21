@@ -30,7 +30,7 @@ another if the database format changed between versions.
 				log.Fatal().Err(err).Str("path", args[0]).Msg("error while opening database")
 			}
 		}
-		exts := db.List()
+		exts := db.List(false)
 		for _, e := range exts {
 			for _, v := range e.Versions {
 				fmt.Printf("%s %s\n", e.UniqueID(), v.Version)
