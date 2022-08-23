@@ -391,12 +391,27 @@ func (db *DB) Run(q marketplace.Query) (vscode.Results, error) {
 		sort.Sort(vscode.ByPopularity(extensions))
 	}
 
-	// TODO pagination
+	// paginate
+	begin, end := pageBoundaries(len(extensions), q.Filters[0].PageSize, q.Filters[0].PageNumber)
 
 	// add sorted and paginated extensions to the result
-	res.AddExtensions(extensions)
+	res.AddExtensions(extensions[begin:end])
 
 	return res, nil
+}
+
+// pageBoundaries return the begin and end index for a given page size and page. Indices
+// can be used when slicing arrays/slices.
+func pageBoundaries(totalCount, pageSize, pageNumber int) (begin, end int) {
+	if pageNumber < 1 {
+		pageNumber = 1
+	}
+	begin = ((pageNumber - 1) * pageSize)
+	end = begin + pageSize
+	if end > totalCount {
+		end = totalCount
+	}
+	return
 }
 
 // String dumps the entire database as a JSON string.

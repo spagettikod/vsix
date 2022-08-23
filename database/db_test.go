@@ -269,3 +269,25 @@ func TestSearch(t *testing.T) {
 		t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].Versions[0].Version)
 	}
 }
+
+func TestPageBoundaries(t *testing.T) {
+	tests := []struct {
+		totalCount int
+		pageSize   int
+		page       int
+		begin      int
+		end        int
+	}{
+		{123, 50, -1, 0, 50},
+		{123, 50, 0, 0, 50},
+		{123, 50, 1, 0, 50},
+		{123, 50, 2, 50, 100},
+		{123, 50, 3, 100, 123},
+	}
+	for _, v := range tests {
+		begin, end := pageBoundaries(v.totalCount, v.pageSize, v.page)
+		if v.begin != begin || v.end != end {
+			t.Errorf("extected extension begin=%v and end=%v, got begin=%v and end=%v", v.begin, v.end, begin, end)
+		}
+	}
+}
