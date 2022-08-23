@@ -42,6 +42,7 @@ func Test_AddExtensions(t *testing.T) {
 	r := NewResults()
 
 	r.AddExtensions(exts)
+	r.SetTotalCount(1)
 	if len(r.Results[0].Extensions) != 1 {
 		t.Errorf("Expected 1 extension but found %v", len(r.Results[0].Extensions))
 	}
@@ -49,6 +50,7 @@ func Test_AddExtensions(t *testing.T) {
 		t.Errorf("Expected metadata count to be 1 but was %v", r.Results[0].ResultMetadata[0].MetadataItems[0].Count)
 	}
 	r.AddExtensions(newExts)
+	r.SetTotalCount(3)
 	if len(r.Results[0].Extensions) != 3 {
 		t.Errorf("Expected 3 extension but found %v", len(r.Results[0].Extensions))
 	}
