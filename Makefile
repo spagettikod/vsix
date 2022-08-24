@@ -28,7 +28,7 @@ pkg_linux: build_linux
 pkg_macos: build_macos
 	@tar -C $(OUTPUT) -czf $(OUTPUT)/vsix$(VERSION).macos-arm64.tar.gz vsix
 
-pkg_docker_dev:
+pkg_docker_dev: test
 	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t registry.spagettikod.se:8443/vsix:v$(VERSION)-dev --build-arg VERSION=$(VERSION) .
 
 pkg_docker:
