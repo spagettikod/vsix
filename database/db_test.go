@@ -240,8 +240,8 @@ func TestSearch(t *testing.T) {
 		t.Skip("skipping integration tests when -test.short")
 	}
 	e := memdb.Search(false, "Code formatter")
-	if len(e) != 1 {
-		t.Fatalf("extected %v extensions, got %v", 1, len(e))
+	if len(e) != 3 {
+		t.Fatalf("extected %v extensions, got %v", 3, len(e))
 	}
 
 	if len(e[0].Versions) != 2 {
@@ -257,8 +257,8 @@ func TestSearch(t *testing.T) {
 	}
 
 	e = memdb.Search(true, "Code formatter")
-	if len(e) != 1 {
-		t.Fatalf("extected %v extensions, got %v", 1, len(e))
+	if len(e) != 3 {
+		t.Fatalf("extected %v extensions, got %v", 3, len(e))
 	}
 
 	if len(e[0].Versions) != 1 {
