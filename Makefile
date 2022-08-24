@@ -1,4 +1,4 @@
-VERSION=2.3.0
+VERSION=2.3.1
 OUTPUT=_pkg
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
 

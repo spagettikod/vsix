@@ -324,8 +324,9 @@ func (db *DB) FindByExtensionID(keepLatestVersion bool, ids ...string) []vscode.
 }
 
 func multiContains(s string, substrs ...string) bool {
+	s = strings.ToLower(s)
 	for _, substr := range substrs {
-		if strings.Contains(s, substr) {
+		if strings.Contains(s, strings.ToLower(substr)) {
 			return true
 		}
 	}
