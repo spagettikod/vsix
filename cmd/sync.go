@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	syncCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
+	addDataFlag(syncCmd)
 	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-seaprated list of target platforms to sync")
 	syncCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
 	rootCmd.AddCommand(syncCmd)
@@ -36,7 +36,7 @@ Extensions are downloaded to the current folder unless the output-flag is set.
 The command will exit with exit code 78 if one of the extensions can not be found
 or a given version does not exist. These errors will be logged to stderr
 output but the execution will not stop.`,
-	Example: `  $ vsix sync -o downloads my_extensions.txt
+	Example: `  $ vsix sync -d downloads my_extensions.txt
 	
   $ docker run --rm \
 	-v downloads:/data \
@@ -56,12 +56,12 @@ output but the execution will not stop.`,
 		extensions = marketplace.Deduplicate(extensions)
 		log.Debug().Msgf("found %v extensions to sync in total", len(extensions))
 		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
-		db, err := database.OpenFs(out, false)
+		db, err := database.OpenFs(dbPath, false)
 		if err != nil {
-			log.Fatal().Err(err).Str("database_root", out).Msg("could not open database")
+			log.Fatal().Err(err).Str("database_root", dbPath).Msg("could not open database")
 		}
 		downloads, loggedErrors := downloadExtensions(extensions, targetPlatforms, preRelease, db)
-		dllog := log.With().Str("path", out).Int("downloaded_versions", downloads).Int("sync_errors", loggedErrors).Logger()
+		dllog := log.With().Str("path", dbPath).Int("downloaded_versions", downloads).Int("sync_errors", loggedErrors).Logger()
 		dllog.Info().Msgf("total time for sync %.3fs", time.Since(start).Seconds())
 		if downloads > 0 {
 			dllog.Debug().Msg("notifying database")

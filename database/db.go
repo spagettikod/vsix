@@ -52,7 +52,7 @@ func open(fs afero.Fs, root string, autoreload bool) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	dblog := log.With().Str("component", "database").Str("db", absRoot).Logger()
+	dblog := log.With().Str("component", "database").Str("path", absRoot).Logger()
 	db := &DB{
 		root:    absRoot,
 		items:   []vscode.Extension{},
@@ -594,4 +594,9 @@ func (db *DB) versionAssets(versionRoot string) []vscode.Asset {
 		assets = append(assets, asset)
 	}
 	return assets
+}
+
+func (db *DB) DeleteVersion(e vscode.Extension, v vscode.Version) error {
+	db.dblog.Info().Str("extension", e.UniqueID()).Str("version", v.Version).Msg("removing version")
+	return os.RemoveAll(path.Dir(v.Path))
 }

@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	getCmd.Flags().StringVarP(&out, "output", "o", ".", "output directory for downloaded files")
+	addDataFlag(getCmd)
 	rootCmd.AddCommand(getCmd)
 }
 
@@ -42,7 +42,7 @@ given version does not exist.`,
 }
 
 func get(pe marketplace.ExtensionRequest) {
-	if err := pe.DownloadVSIXPackage(out, true); err != nil {
+	if err := pe.DownloadVSIXPackage(dbPath, true); err != nil {
 		fmt.Printf("%s: %s\n", pe, err)
 		os.Exit(1)
 	}

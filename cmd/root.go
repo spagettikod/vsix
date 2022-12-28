@@ -28,18 +28,19 @@ var (
 			}
 		},
 	}
-	verbose                      bool
-	debug                        bool
-	jsonLog                      bool
-	out                          string   // used by sub-commands
+	verbose bool
+	debug   bool
+	jsonLog bool
+	// out                          string   // used by sub-commands
 	limit                        int      // used by sub-commands
 	sortByFlag                   string   // used by sub-commands
-	serveDBRoot                  string   // used by sub-commands
+	dbPath                       string   // used by sub-commands
 	serveAddr                    string   // used by sub-commands
 	serveCert                    string   // used by sub-commands
 	serveKey                     string   // used by sub-commands
 	targetPlatforms              []string // used by sub-commands
 	preRelease                   bool     // used by sub-commands
+	keep                         int      // used by sub-commands
 	ErrFileExists                error    = errors.New("extension has already been downloaded")
 	ErrVersionNotFound           error    = errors.New("could not find version at Marketplace")
 	ErrOutDirNotFound            error    = errors.New("output dir does not exist")
@@ -55,7 +56,7 @@ func init() {
 // Execute TODO
 func Execute(version string) {
 	rootCmd.Version = version
-	log.Logger = log.With().Str("version", rootCmd.Version).Logger()
+	log.Logger = log.With().Str("vsix_version", rootCmd.Version).Logger()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -74,4 +75,8 @@ func EnvOrFlagBool(env string, flag bool) bool {
 		return true
 	}
 	return flag
+}
+
+func addDataFlag(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored")
 }
