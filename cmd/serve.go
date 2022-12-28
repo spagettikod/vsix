@@ -29,7 +29,7 @@ const (
 )
 
 func init() {
-	serveCmd.Flags().StringVarP(&serveDBRoot, "data", "d", ".", "directory where downloaded extensions are stored")
+	addDataFlag(serveCmd)
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
 	serveCmd.Flags().StringVar(&serveCert, "cert", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
 	serveCmd.Flags().StringVar(&serveKey, "key", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
@@ -72,8 +72,8 @@ below.
 
 		// load database of extensions
 		root := "."
-		if len(serveDBRoot) > 0 {
-			root = serveDBRoot
+		if len(dbPath) > 0 {
+			root = dbPath
 		}
 		db, err := database.OpenFs(root, true)
 		if err != nil {
