@@ -5,7 +5,6 @@ import (
 )
 
 func init() {
-	addDataFlag(dbCmd)
 	rootCmd.AddCommand(dbCmd)
 }
 

@@ -8,15 +8,15 @@ import (
 )
 
 type Version struct {
-	Version          string     `json:"version"`
-	TargetPlatform   string     `json:"targetPlatform,omitempty"`
-	Flags            string     `json:"flags"`
-	LastUpdated      time.Time  `json:"lastUpdated"`
-	Files            []Asset    `json:"files"`
-	Properties       []Property `json:"properties"`
-	AssetURI         string     `json:"assetUri"`
-	FallbackAssetURI string     `json:"fallbackAssetUri"`
-	Path             string     `json:"-"`
+	Version           string     `json:"version"`
+	RawTargetPlatform string     `json:"targetPlatform,omitempty"`
+	Flags             string     `json:"flags"`
+	LastUpdated       time.Time  `json:"lastUpdated"`
+	Files             []Asset    `json:"files"`
+	Properties        []Property `json:"properties"`
+	AssetURI          string     `json:"assetUri"`
+	FallbackAssetURI  string     `json:"fallbackAssetUri"`
+	Path              string     `json:"-"`
 }
 
 type Property struct {
@@ -64,4 +64,11 @@ func (v Version) String() string {
 		return "! JSON UNMARSHAL FAILED !"
 	}
 	return string(b)
+}
+
+func (v Version) TargetPlatform() string {
+	if v.RawTargetPlatform == "" {
+		return "universal"
+	}
+	return v.RawTargetPlatform
 }

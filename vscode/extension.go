@@ -103,7 +103,7 @@ func (e Extension) IsExtensionPack() bool {
 func (e Extension) IsMultiPlatform(preRelease bool) bool {
 	v, _ := e.Version(e.LatestVersion(preRelease))
 	if len(v) > 1 {
-		return v[0].TargetPlatform != ""
+		return v[0].RawTargetPlatform != ""
 	}
 	return false
 }

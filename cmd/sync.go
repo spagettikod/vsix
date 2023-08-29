@@ -11,8 +11,7 @@ import (
 )
 
 func init() {
-	addDataFlag(syncCmd)
-	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-seaprated list of target platforms to sync")
+	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list of target platforms to sync (Universal is always fetched)")
 	syncCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
 	rootCmd.AddCommand(syncCmd)
 }
@@ -106,7 +105,7 @@ func downloadExtensions(extensions []marketplace.ExtensionRequest, targetPlatfor
 			elog.Err(err).Msg("could not save extension to database")
 		}
 		for _, v := range extension.Versions {
-			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.TargetPlatform).Logger()
+			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.RawTargetPlatform).Logger()
 			if v.IsPreRelease() && !pe.PreRelease && pe.Version == "" {
 				vlog.Debug().Msg("skipping, version is a pre-release")
 				continue

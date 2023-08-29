@@ -9,10 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var quiet bool
-
 func init() {
-	dbListCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "display result in short format, usually the item identifier")
 	dbCmd.AddCommand(dbListCmd)
 }
 

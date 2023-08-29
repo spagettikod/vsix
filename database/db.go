@@ -285,16 +285,17 @@ func (db *DB) GetVersion(uniqueID string, version vscode.Version) (vscode.Versio
 
 // FindByUniqueID returns an array of extensions matching a list of uniqueID's. If keepLatestVersion is true only the latest
 // version is keep of all available version for returned extensions. When false all versions for an extension are included.
+// This function ignores case.
 func (db *DB) FindByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vscode.Extension {
 	queryMap := map[string]bool{}
 
 	for _, id := range uniqueIDs {
-		queryMap[id] = true
+		queryMap[strings.ToLower(id)] = true
 	}
 
 	result := []vscode.Extension{}
 	for _, i := range db.items {
-		if queryMap[i.UniqueID()] {
+		if queryMap[strings.ToLower(i.UniqueID())] {
 			if keepLatestVersion {
 				i = i.KeepVersions(i.LatestVersion(true))
 			}

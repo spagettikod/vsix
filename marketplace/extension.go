@@ -84,13 +84,11 @@ func (er ExtensionRequest) Equals(er2 ExtensionRequest) bool {
 }
 
 func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
-	// empty target platform equals Universal and is always valid so is
-	// an empty list of unwanted platforms
-	if v.TargetPlatform == "" || len(pe.TargetPlatforms) == 0 {
+	if len(pe.TargetPlatforms) == 0 {
 		return true
 	}
 	for _, tp := range pe.TargetPlatforms {
-		if v.TargetPlatform == tp {
+		if v.RawTargetPlatform == tp {
 			return true
 		}
 	}
