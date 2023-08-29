@@ -43,12 +43,8 @@ Extension pack:       %s
 `
 		version, _ := ext.Version(ext.LatestVersion(preRelease))
 		targetPlatforms := []string{}
-		if len(version) == 1 && version[0].TargetPlatform == "" {
-			targetPlatforms = []string{"Universal"}
-		} else {
-			for _, v := range version {
-				targetPlatforms = append(targetPlatforms, v.TargetPlatform)
-			}
+		for _, v := range version {
+			targetPlatforms = append(targetPlatforms, v.TargetPlatform())
 		}
 		fmt.Printf(s,
 			ext.Name,

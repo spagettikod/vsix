@@ -16,6 +16,7 @@ var (
 		Use:   "vsix",
 		Short: "Visual Studio Code Extension Marketplace command line interface tool.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			dbPath = EnvOrFlag("VSIX_DB_PATH", dbPath)
 			if !EnvOrFlagBool("VSIX_LOG_JSON", jsonLog) {
 				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 			}
@@ -40,6 +41,7 @@ var (
 	serveKey                     string   // used by sub-commands
 	targetPlatforms              []string // used by sub-commands
 	preRelease                   bool     // used by sub-commands
+	force                        bool     // used by sub-commands
 	keep                         int      // used by sub-commands
 	ErrFileExists                error    = errors.New("extension has already been downloaded")
 	ErrVersionNotFound           error    = errors.New("could not find version at Marketplace")
@@ -48,6 +50,7 @@ var (
 )
 
 func init() {
+	rootCmd.PersistentFlags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "turn on debug logging [VSIX_LOG_DEBUG]")
 	rootCmd.PersistentFlags().BoolVar(&jsonLog, "json", false, "output verbose and debug logs as JSON [VSIX_LOG_JSON]")
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "turn on verbose logging [VSIX_LOG_VERBOSE]")
@@ -75,8 +78,4 @@ func EnvOrFlagBool(env string, flag bool) bool {
 		return true
 	}
 	return flag
-}
-
-func addDataFlag(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored")
 }

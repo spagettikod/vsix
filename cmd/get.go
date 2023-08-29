@@ -9,7 +9,6 @@ import (
 )
 
 func init() {
-	addDataFlag(getCmd)
 	rootCmd.AddCommand(getCmd)
 }
 
