@@ -12,20 +12,39 @@ import (
 )
 
 func init() {
-	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list of target platforms to sync (Universal is always fetched)")
+	syncCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list of target platforms to sync")
 	syncCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
-	rootCmd.AddCommand(syncCmd)
+	dbCmd.AddCommand(syncCmd)
 }
 
 var syncCmd = &cobra.Command{
-	Use:   "sync [flags]",
+	Use:   "sync",
 	Short: "Update extensions in the database with their latest version",
 	Long: `Sync will download the latest version of all the extensions currently in
-the database. 
+the database.
+
+Only the latest version will be downloaded each time sync is run. If the extension
+has had multiple releases between each run of sync those versions will not be
+downloaded.
 
 The command will exit with exit code 78 if one of the extensions can not be found
 or a given version does not exist. These errors will be logged to stderr
-output but the execution will not stop.`,
+output but the execution will not stop.
+
+Target platforms
+----------------
+By default all platform versions of an extension is synced. You can limit which platforms
+to sync by using the platforms-flag. This is a comma separated list of platforms. You can
+view available platforms for an extension by using the info-command. The
+universal-platform is always added, regardless of the platforms-flag.
+
+Pre-releases
+------------
+By default sync skips extension versions marked as pre-release. If the latest version
+is marked as pre-release the command will traverse the list of versions until it
+finds the latest version not marked as pre-release. To enable downloading an extension
+and selecting the latest version, regardless if marked as pre-release, use the
+pre-release-flag.`,
 	Example: `  $ vsix sync -d downloads
 	
   $ docker run --rm \

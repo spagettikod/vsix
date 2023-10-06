@@ -12,17 +12,35 @@ import (
 )
 
 func init() {
-	dbAddCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list of target platforms to sync (Universal is always fetched)")
-	dbAddCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
+	dbAddCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list to limit which target platforms to add")
+	dbAddCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions, these are skipped by default")
 	dbAddCmd.Flags().BoolVar(&force, "force", false, "download extension eventhough it already exists in database")
 	dbCmd.AddCommand(dbAddCmd)
 }
 
 var dbAddCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Add extension to the database",
-	Long: `Downloads and adds the latest version on the given extension to the database.
-Once added, use the sync command to keep the extension up to date with the marketplace.`,
+	Use:   "add <identifier...>",
+	Short: "Add extension(s) from Marketplace to the database",
+	Long: `Downloads the latest version of the given extension(s) from Marketplace to the database.
+Once added, use the sync command to keep the extension up to date with Marketplace.
+
+Multiple identifiers, separated by space, can be used to add multiple extensions at once.
+
+Target platforms
+----------------
+By default all platform versions of an extension is added. You can limit which platforms
+to add by using the platforms-flag. This is a comma separated list of platforms. You can
+view available platforms for an extension by using the info-command. The
+universal-platform is always added, regardless of the platforms-flag.
+
+Pre-releases
+------------
+By default add skips extension versions marked as pre-release. If the latest version
+is marked as pre-release the add-command will traverse the list of versions until it
+finds the latest version not marked as pre-release. To enable adding an extension and
+selecting the latest version, regardless if marked as pre-release, use the
+pre-release-flag.
+`,
 	Example:               "  $ vsix db add redhat.java",
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
