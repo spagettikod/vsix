@@ -13,12 +13,12 @@ import (
 var (
 	memdb          *database.DB
 	testExtensions = []marketplace.ExtensionRequest{
-		{UniqueID: "golang.Go", Version: "0.31.1"},
-		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0"},
-		{UniqueID: "esbenp.prettier-vscode", Version: "9.2.0"},
-		{UniqueID: "__no_real_extension", Version: "0.0.0"},
+		{UniqueID: "golang.Go", Version: "0.31.1", TargetPlatforms: []string{"linux-x64"}},
+		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0", TargetPlatforms: []string{"linux-x64"}},
+		{UniqueID: "esbenp.prettier-vscode", Version: "9.2.0", TargetPlatforms: []string{"linux-x64"}},
+		{UniqueID: "__no_real_extension", Version: "0.0.0", TargetPlatforms: []string{"linux-x64"}},
 		// pre-release and an extension pack, will result in also downloading ms-vscode-remote.remote-ssh-edit
-		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315", PreRelease: true},
+		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315", PreRelease: true, TargetPlatforms: []string{"linux-x64"}},
 	}
 	expectedDownloadCount         = 4
 	expectedErrorCount            = 1
@@ -47,7 +47,17 @@ func TestIntegrationTests(t *testing.T) {
 	}
 
 	// download extensions to test database
-	downloads, errors := downloadExtensions(testExtensions, []string{"linux-x64"}, true, memdb)
+	// downloads, errors := downloadExtensions(testExtensions, []string{"linux-x64"}, true, memdb)
+	downloads, errors := 0, 0
+	for _, testExtension := range testExtensions {
+		d, err := FetchExtension(testExtension, memdb, false, []string{testExtension.UniqueID}, "test")
+		if err != nil {
+			errors++
+		}
+		if d {
+			downloads++
+		}
+	}
 	if errors != expectedErrorCount {
 		fmt.Printf("expected %v error, got %v\n", expectedErrorCount, errors)
 		os.Exit(-1)
@@ -250,3 +260,37 @@ func TestSearch(t *testing.T) {
 		t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].Versions[0].Version)
 	}
 }
+
+// func TestConcurrent(t *testing.T) {
+// 	maxRunning := 2
+// 	running := 0
+// 	type Work struct {
+// 		id   string
+// 		time time.Duration
+// 	}
+// 	work := []Work{
+// 		{id: "A", time: 2000 * time.Millisecond},
+// 		{id: "B", time: 4000 * time.Millisecond},
+// 		{id: "C", time: 3000 * time.Millisecond},
+// 		{id: "D", time: 5000 * time.Millisecond},
+// 		{id: "E", time: 2000 * time.Millisecond},
+// 	}
+// 	ch := make(chan string)
+// 	for _, w := range work {
+// 		if running >= maxRunning {
+// 			// fmt.Println("waiting", w.id)
+// 			<-ch
+// 			running--
+// 		}
+// 		fmt.Println("running", w.id)
+// 		running++
+// 		go func(inch chan string, w Work) {
+// 			// fmt.Println("working", id)
+// 			time.Sleep(w.time)
+// 			fmt.Println("exiting", w.id)
+// 			inch <- w.id
+// 		}(ch, w)
+// 	}
+// 	// <-ch
+// 	fmt.Println("done", <-ch)
+// }

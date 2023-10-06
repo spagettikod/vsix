@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -17,136 +18,105 @@ func init() {
 }
 
 var syncCmd = &cobra.Command{
-	Use:   "sync [flags] <file|dir>",
-	Short: "Download packages to be served by the serve command",
-	Long: `Sync will download all the extensions specified in a text file. If a directory is
-given as input all text files in that directory (and its sub directories) will be parsed
-in search of extensions to download.
+	Use:   "sync [flags]",
+	Short: "Update extensions in the database with their latest version",
+	Long: `Sync will download the latest version of all the extensions currently in
+the database. 
 
-Input file example:
-  # This is a comment
-  # This will download the latest version 
-  golang.Go
-  # This will download version 0.17.0 of the golang extension
-  golang.Go 0.17.0
-	
-Extensions are downloaded to the current folder unless the output-flag is set.
-	
 The command will exit with exit code 78 if one of the extensions can not be found
 or a given version does not exist. These errors will be logged to stderr
 output but the execution will not stop.`,
-	Example: `  $ vsix sync -d downloads my_extensions.txt
+	Example: `  $ vsix sync -d downloads
 	
   $ docker run --rm \
 	-v downloads:/data \
-	-v extensions_to_sync:/extensions_to_sync \
-	spagettikod/vsix sync /extensions_to_sync`,
-	Args:                  cobra.MinimumNArgs(1),
+	-w /data \
+	spagettikod/vsix sync`,
+	// Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
-		extensions, err := marketplace.NewFromFile(args[0])
-		if err != nil {
-			log.Fatal().Err(err).Str("path", args[0]).Msg("error while reading extension specification files")
-		}
-		if len(extensions) == 0 {
-			log.Fatal().Msgf("no extensions found at path '%s', exiting", args[0])
-		}
-		extensions = marketplace.Deduplicate(extensions)
-		log.Debug().Msgf("found %v extensions to sync in total", len(extensions))
-		log.Debug().Msgf("parsing took %.3fs", time.Since(start).Seconds())
+		lg := log.With().Str("database_root", dbPath).Str("component", "sync").Logger()
 		db, err := database.OpenFs(dbPath, false)
 		if err != nil {
-			log.Fatal().Err(err).Str("database_root", dbPath).Msg("could not open database")
+			lg.Fatal().Err(err).Msg("could not open database")
 		}
-		downloads, loggedErrors := downloadExtensions(extensions, targetPlatforms, preRelease, db)
-		dllog := log.With().Str("path", dbPath).Int("downloaded_versions", downloads).Int("sync_errors", loggedErrors).Logger()
+		lg.Debug().Msgf("open database took %.3fs", time.Since(start).Seconds())
+		exts := db.List(true)
+
+		// maxRunning := 20
+		// running := 0
+		processed := sync.Map{}
+		// ch := make(chan string)
+		errCount := 0
+		fetchCount := 0
+		for _, ext := range exts {
+			lg = log.With().Str("extension_id", ext.UniqueID()).Logger()
+			// if ext.IsExtensionPack() {
+			// 	fmt.Println("skipping, is pack", ext.UniqueID())
+			// 	continue
+			// }
+			// if running >= maxRunning {
+			// 	fmt.Println("waiting", ext.UniqueID())
+			// 	<-ch
+			// 	running--
+			// }
+			if _, found := processed.Load(ext.UniqueID()); found {
+				lg.Debug().Msg("already processed, skipping")
+				continue
+			}
+			// fmt.Println("running", ext.UniqueID())
+			processed.Store(ext.UniqueID(), true)
+
+			// running++
+			// go func(inch chan string, e vscode.Extension) {
+			er := marketplace.ExtensionRequest{
+				UniqueID: ext.UniqueID(),
+				// UniqueID:        e.UniqueID(),
+				TargetPlatforms: targetPlatforms,
+				PreRelease:      preRelease,
+			}
+			fetched, err := FetchExtension(er, db, force, []string{er.UniqueID}, "sync")
+			if err != nil {
+				lg.Err(err).Msg("error occured while fetching extension")
+				errCount++
+				continue
+			}
+			if fetched {
+				fetchCount++
+			}
+			// fmt.Println("exiting", e.UniqueID())
+			// 	inch <- e.UniqueID()
+			// }(ch, ext)
+		}
+		// <-ch --skip this?
+		// fmt.Println("done", <-ch)
+
+		// handle extension packs to avoid writing to same
+		// for _, ext := range exts {
+		// 	if ext.IsExtensionPack() {
+		// 		processed.Store(ext.UniqueID(), true)
+		// 		fmt.Println(ext.UniqueID())
+		// 	}
+		// }
+		// for _, ext := range exts {
+		// 	if ext.IsExtensionPack() {
+		// 		continue
+		// 	}
+		// 	fmt.Println(ext.UniqueID())
+		// }
+		// downloads, loggedErrors := downloadExtensions(extensions, targetPlatforms, preRelease, db)
+		dllog := lg.With().Int("downloads", fetchCount).Int("errors", errCount).Logger()
 		dllog.Info().Msgf("total time for sync %.3fs", time.Since(start).Seconds())
-		if downloads > 0 {
+		if fetchCount > 0 {
 			dllog.Debug().Msg("notifying database")
 			err = db.Modified()
 			if err != nil {
 				dllog.Fatal().Err(err).Msg("could not notify database of extension update")
 			}
 		}
-		if loggedErrors > 0 {
+		if errCount > 0 {
 			os.Exit(78)
 		}
 	},
-}
-
-func downloadExtensions(extensions []marketplace.ExtensionRequest, targetPlatforms []string, preRelease bool, db *database.DB) (downloadCount int, errorCount int) {
-	versionDownloadCounter := map[string]bool{}
-	for _, pe := range extensions {
-		extStart := time.Now()
-		pe.PreRelease = preRelease
-		pe.TargetPlatforms = targetPlatforms
-		extension, err := pe.Download(preRelease)
-		if err != nil {
-			log.Error().Str("unique_id", pe.UniqueID).Str("version", pe.Version).Err(err).Msg("unexpected error occured while syncing")
-			errorCount++
-			continue
-		}
-
-		elog := log.With().Str("unique_id", extension.UniqueID()).Logger()
-
-		if extension.IsExtensionPack() {
-			elog.Info().Msg("is extension pack, getting pack contents")
-			content := []marketplace.ExtensionRequest{}
-			for _, pack := range extension.ExtensionPack() {
-				content = append(content, marketplace.ExtensionRequest{UniqueID: pack})
-			}
-			dc, ec := downloadExtensions(content, targetPlatforms, preRelease, db)
-			downloadCount += dc
-			errorCount += ec
-		}
-
-		if err := db.SaveExtensionMetadata(extension); err != nil {
-			elog.Err(err).Msg("could not save extension to database")
-		}
-		for _, v := range extension.Versions {
-			vlog := elog.With().Str("version", v.Version).Str("target_platform", v.RawTargetPlatform).Logger()
-			if v.IsPreRelease() && !pe.PreRelease && pe.Version == "" {
-				vlog.Debug().Msg("skipping, version is a pre-release")
-				continue
-			}
-			if !pe.ValidTargetPlatform(v) {
-				vlog.Debug().Msg("skipping, unwanted target platform")
-				continue
-			}
-			if existingVersion, found := db.GetVersion(extension.UniqueID(), v); found {
-				// if the new version is no longer in pre-relase state we're replacing
-				// it with the new one
-				if !(existingVersion.IsPreRelease() && !v.IsPreRelease()) {
-					vlog.Debug().Msg("skipping, version already exists")
-					continue
-				}
-			}
-			if err := db.SaveVersionMetadata(extension, v); err != nil {
-				vlog.Err(err).Msg("could not save version to database")
-			}
-			for _, a := range v.Files {
-				b, err := a.Download()
-				if err != nil {
-					errorCount++
-					vlog.Err(err).Str("source", a.Source).Msg("download failed")
-					if err := db.Rollback(extension, v); err != nil {
-						vlog.Err(err).Msg("rollback failed")
-					}
-					continue
-				}
-				if err := db.SaveAssetFile(extension, v, a, b); err != nil {
-					vlog.Err(err).Str("source", a.Source).Msg("could not save asset file")
-					if err := db.Rollback(extension, v); err != nil {
-						vlog.Err(err).Msg("rollback failed")
-					}
-					continue
-				}
-				versionDownloadCounter[pe.UniqueID+v.Version] = true
-			}
-		}
-		downloadCount = len(versionDownloadCounter)
-		elog.Debug().Msgf("sync took %.3fs", time.Since(extStart).Seconds())
-	}
-	return
 }

@@ -276,7 +276,7 @@ func (db *DB) GetVersion(uniqueID string, version vscode.Version) (vscode.Versio
 		return vscode.Version{}, false
 	}
 	for _, v := range exts[0].Versions {
-		if v.Equals(version) {
+		if v.ID() == version.ID() {
 			return v, true
 		}
 	}

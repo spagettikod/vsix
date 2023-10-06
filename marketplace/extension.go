@@ -3,7 +3,6 @@ package marketplace
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 
@@ -87,6 +86,10 @@ func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
 	if len(pe.TargetPlatforms) == 0 {
 		return true
 	}
+	// empty RawTargetPlatform means universal and is always valid
+	if v.RawTargetPlatform == "" {
+		return true
+	}
 	for _, tp := range pe.TargetPlatforms {
 		if v.RawTargetPlatform == tp {
 			return true
@@ -167,12 +170,11 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) err
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, b, 0666)
+	return os.WriteFile(filename, b, 0666)
 }
 
-// Download will fetch the extension all its assets making it ready to be
-// served by the serve command. It returns true if download succeeded and
-// false if the requested version already exists at output.
+// Download fetches metadata for the requested extension and returns it
+// as an Extension struct.
 func (extReq ExtensionRequest) Download(preRelease bool) (vscode.Extension, error) {
 	elog := log.With().Str("extension", extReq.UniqueID).Str("extension_version", extReq.Version).Logger()
 
@@ -182,13 +184,13 @@ func (extReq ExtensionRequest) Download(preRelease bool) (vscode.Extension, erro
 		return vscode.Extension{}, err
 	}
 
-	// set version to the latest since no version was given in the request
+	// set version to the latest if no version was given in the request
 	if extReq.Version == "" {
 		elog.Debug().Msg("version was not specified, setting to latest version")
 		extReq.Version = ext.LatestVersion(preRelease)
 	}
 
-	// only keep the version from the request
+	// only keep the requested (or latest, see above) version
 	ext = ext.KeepVersions(extReq.Version)
 	if len(ext.Versions) == 0 {
 		elog.Debug().Msg("requested version was not found at Marketplace")
