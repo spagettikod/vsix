@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	rootCmd.AddCommand(dumpCmd)
+	dbCmd.AddCommand(dumpCmd)
 }
 
 var dumpCmd = &cobra.Command{

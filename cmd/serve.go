@@ -32,12 +32,12 @@ func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
 	serveCmd.Flags().StringVar(&serveCert, "cert", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
 	serveCmd.Flags().StringVar(&serveKey, "key", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
-	rootCmd.AddCommand(serveCmd)
+	dbCmd.AddCommand(serveCmd)
 }
 
 var serveCmd = &cobra.Command{
 	Use:   "serve [flags] <external URL>",
-	Short: "Serve downloaded extensions to Visual Studio Code",
+	Short: "Serve database extensions to Visual Studio Code",
 	Long: `This command will start a HTTPS server that is compatible with Visual Studio Code.
 When setup you can browse, search and install extensions previously downloaded
 using the sync command. If sync is run and new extensions are downloaded

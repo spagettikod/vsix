@@ -16,7 +16,7 @@ func init() {
 
 var versionsCmd = &cobra.Command{
 	Use:                   "versions <identifier>",
-	Short:                 "List avilable versions for an extension",
+	Short:                 "List available versions at Marketplace for an extension",
 	Example:               "  $ vsix versions golang.Go",
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,

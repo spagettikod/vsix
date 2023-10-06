@@ -18,7 +18,7 @@ func init() {
 
 var infoCmd = &cobra.Command{
 	Use:                   "info <identifier>",
-	Short:                 "Display package information",
+	Short:                 "Display package information from Marketplace",
 	Example:               "  $ vsix info golang.Go",
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
