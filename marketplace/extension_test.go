@@ -1,6 +1,8 @@
 package marketplace
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestEquals(t *testing.T) {
 	tests := []ExtensionRequest{

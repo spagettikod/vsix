@@ -3,6 +3,7 @@ package vscode
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 )
@@ -160,6 +161,7 @@ func (e Extension) RatingCount() int {
 
 func (e Extension) KeepVersions(versions ...string) Extension {
 	newExt := e
+	// newExt.Versions = e.Versions
 	newExt.Versions = e.Versions[:0]
 	for _, v := range e.Versions {
 		for _, keep := range versions {
@@ -200,4 +202,17 @@ func (e Extension) Version(version string) ([]Version, bool) {
 		}
 	}
 	return versions, len(versions) > 0
+}
+
+// Platforms returns target platforms for the extension. The returned
+// list will include platforms across all versions eventhough target
+// platform might differ across versions.
+func (e Extension) Platforms() []string {
+	platforms := []string{}
+
+	for _, v := range e.Versions {
+		platforms = append(platforms, v.TargetPlatform())
+	}
+
+	return slices.Compact(platforms)
 }

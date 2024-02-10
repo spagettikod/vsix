@@ -43,11 +43,10 @@ package xid
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/sha256"
 	"crypto/rand"
 	"database/sql/driver"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"hash/crc32"
 	"io/ioutil"
@@ -73,16 +72,11 @@ const (
 )
 
 var (
-	// ErrInvalidID is returned when trying to unmarshal an invalid ID
-	ErrInvalidID = errors.New("xid: invalid ID")
-
-	// objectIDCounter is atomically incremented when generating a new ObjectId
-	// using NewObjectId() function. It's used as a counter part of an id.
-	// This id is initialized with a random value.
+	// objectIDCounter is atomically incremented when generating a new ObjectId. It's
+	// used as the counter part of an id. This id is initialized with a random value.
 	objectIDCounter = randInt()
 
-	// machineId stores machine id generated once and used in subsequent calls
-	// to NewObjectId function.
+	// machineID is generated once and used in subsequent calls to the New* functions.
 	machineID = readMachineID()
 
 	// pid stores the current process id
@@ -111,9 +105,9 @@ func init() {
 	}
 }
 
-// readMachineId generates machine id and puts it into the machineId global
-// variable. If this function fails to get the hostname, it will cause
-// a runtime error.
+// readMachineID generates a machine ID, derived from a platform-specific machine ID
+// value, or else the machine's hostname, or else a randomly-generated number.
+// It panics if all of these methods fail.
 func readMachineID() []byte {
 	id := make([]byte, 3)
 	hid, err := readPlatformMachineID()
@@ -121,7 +115,7 @@ func readMachineID() []byte {
 		hid, err = os.Hostname()
 	}
 	if err == nil && len(hid) != 0 {
-		hw := md5.New()
+		hw := sha256.New()
 		hw.Write([]byte(hid))
 		copy(id, hw.Sum(nil))
 	} else {
@@ -152,7 +146,7 @@ func NewWithTime(t time.Time) ID {
 	var id ID
 	// Timestamp, 4 bytes, big endian
 	binary.BigEndian.PutUint32(id[:], uint32(t.Unix()))
-	// Machine, first 3 bytes of md5(hostname)
+	// Machine ID, 3 bytes
 	id[4] = machineID[0]
 	id[5] = machineID[1]
 	id[6] = machineID[2]
@@ -242,7 +236,10 @@ func (id *ID) UnmarshalText(text []byte) error {
 			return ErrInvalidID
 		}
 	}
-	decode(id, text)
+	if !decode(id, text) {
+		*id = nilID
+		return ErrInvalidID
+	}
 	return nil
 }
 
@@ -253,15 +250,23 @@ func (id *ID) UnmarshalJSON(b []byte) error {
 		*id = nilID
 		return nil
 	}
+	// Check the slice length to prevent panic on passing it to UnmarshalText()
+	if len(b) < 2 {
+		return ErrInvalidID
+	}
 	return id.UnmarshalText(b[1 : len(b)-1])
 }
 
-// decode by unrolling the stdlib base32 algorithm + removing all safe checks
-func decode(id *ID, src []byte) {
+// decode by unrolling the stdlib base32 algorithm + customized safe check.
+func decode(id *ID, src []byte) bool {
 	_ = src[19]
 	_ = id[11]
 
 	id[11] = dec[src[17]]<<6 | dec[src[18]]<<1 | dec[src[19]]>>4
+	// check the last byte
+	if encoding[(id[11]<<4)&0x1F] != src[19] {
+		return false
+	}
 	id[10] = dec[src[16]]<<3 | dec[src[17]]>>2
 	id[9] = dec[src[14]]<<5 | dec[src[15]]
 	id[8] = dec[src[12]]<<7 | dec[src[13]]<<2 | dec[src[14]]>>3
@@ -273,6 +278,7 @@ func decode(id *ID, src []byte) {
 	id[2] = dec[src[3]]<<4 | dec[src[4]]>>1
 	id[1] = dec[src[1]]<<6 | dec[src[2]]<<1 | dec[src[3]]>>4
 	id[0] = dec[src[0]]<<3 | dec[src[1]]>>2
+	return true
 }
 
 // Time returns the timestamp part of the id.
@@ -330,6 +336,11 @@ func (id *ID) Scan(value interface{}) (err error) {
 // IsNil Returns true if this is a "nil" ID
 func (id ID) IsNil() bool {
 	return id == nilID
+}
+
+// Alias of IsNil
+func (id ID) IsZero() bool {
+	return id.IsNil()
 }
 
 // NilID returns a zero value for `xid.ID`.

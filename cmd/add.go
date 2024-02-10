@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"slices"
 	"time"
 
@@ -12,10 +11,11 @@ import (
 )
 
 func init() {
+	dbAddCmd.Flags().IntVar(&threads, "threads", 10, "number of simultaneous download threads")
 	dbAddCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list to limit which target platforms to add")
 	dbAddCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions, these are skipped by default")
 	dbAddCmd.Flags().BoolVar(&force, "force", false, "download extension eventhough it already exists in database")
-	dbCmd.AddCommand(dbAddCmd)
+	rootCmd.AddCommand(dbAddCmd)
 }
 
 var dbAddCmd = &cobra.Command{
@@ -52,106 +52,28 @@ pre-release-flag.
 			log.Fatal().Err(err).Str("database_root", dbPath).Msg("could not open database")
 		}
 
+		extensionsToAdd := []marketplace.ExtensionRequest{}
 		for _, arg := range args {
-			existingExtensions := db.FindByUniqueID(true, arg)
-			if len(existingExtensions) > 0 && !force {
-				fmt.Printf("extension with unique id '%v' already exist in the database\n", arg)
-				continue
-			}
-
 			er := marketplace.ExtensionRequest{
 				UniqueID:        arg,
 				TargetPlatforms: targetPlatforms,
 				PreRelease:      preRelease,
 			}
-			_, err := FetchExtension(er, db, force, []string{er.UniqueID}, "add")
-			if err != nil {
-				log.Fatal().Err(err).Str("database_root", dbPath).Msg("error occured while fetching extension")
+			if ext, found := db.GetByUniqueID(false, arg); found {
+				if slices.Compare(ext.Platforms(), targetPlatforms) == 0 {
+					logger.Info().Msgf("extension %v for the given platforms already exists", arg)
+					continue
+				}
 			}
+			extensionsToAdd = append(extensionsToAdd, er)
 		}
+		extensionsToAdd = marketplace.Deduplicate(extensionsToAdd)
 
-		logger.Debug().Msgf("total time for add %.3fs", time.Since(start).Seconds())
+		fetchCount, errCount := fetchThreaded(db, extensionsToAdd, threads, logger)
+		if errCount > 0 {
+			logger.Error().Msgf("%v extensions were added and %v errors occured, command took %.3fs", fetchCount, errCount, time.Since(start).Seconds())
+		} else {
+			logger.Info().Msgf("%v extensions were added and %v errors occured, command took %.3fs", fetchCount, errCount, time.Since(start).Seconds())
+		}
 	},
-}
-
-// FetchExtension downloads the extension given in the extension request from Visual Studio Code Marketplace.
-// When downloaded it is added to the database and can be served using the serve command. Besides errors
-// it returns false if the extension version already exists and no download occured. Otherwise it returns true.
-func FetchExtension(req marketplace.ExtensionRequest, db *database.DB, force bool, stack []string, compontent string) (bool, error) {
-	downloadOccurred := false
-	elog := log.With().Str("unique_id", req.UniqueID).Str("component", compontent).Logger()
-	start := time.Now()
-
-	extension, err := req.Download(preRelease)
-	if err != nil {
-		return false, err
-	}
-
-	if extension.IsExtensionPack() {
-		elog.Info().Msg("is extension pack, getting pack contents")
-		for _, itemUniqueID := range extension.ExtensionPack() {
-			if slices.Contains(stack, itemUniqueID) {
-				elog.Warn().Msg("circular extension pack reference, skipping to avoid infinite loop")
-				continue
-			}
-			itemRequest := marketplace.ExtensionRequest{
-				UniqueID:        itemUniqueID,
-				TargetPlatforms: targetPlatforms,
-				PreRelease:      preRelease,
-			}
-			downloadOccurred, err = FetchExtension(itemRequest, db, force, append(stack, itemUniqueID), compontent)
-			if err != nil {
-				return false, err
-			}
-		}
-	}
-
-	if err := db.SaveExtensionMetadata(extension); err != nil {
-		return false, err
-	}
-	elog.Debug().Msgf("extension has %v matching versions", len(extension.Versions))
-	for _, version := range extension.Versions {
-		vlog := elog.With().Str("version", version.Version).Str("version_id", version.ID()).Str("target_platform", version.TargetPlatform()).Logger()
-		if version.IsPreRelease() && !req.PreRelease && req.Version == "" {
-			vlog.Debug().Msg("skipping, version is a pre-release")
-			continue
-		}
-		if !req.ValidTargetPlatform(version) {
-			vlog.Debug().Msg("skipping, unwanted target platform")
-			continue
-		}
-		if existingVersion, found := db.GetVersion(extension.UniqueID(), version); found {
-			// if the new version is no longer in pre-release state we're replacing
-			// it with the new one
-			if !(existingVersion.IsPreRelease() && !version.IsPreRelease()) && !force {
-				vlog.Debug().Msg("skipping, version already exists")
-				continue
-			}
-		}
-		if err := db.SaveVersionMetadata(extension, version); err != nil {
-			return false, err
-		}
-		for _, asset := range version.Files {
-			b, err := asset.Download()
-			if err != nil {
-				vlog.Err(err).Str("source", asset.Source).Msg("download failed")
-				if err := db.Rollback(extension, version); err != nil {
-					vlog.Err(err).Msg("rollback failed")
-					return false, err
-				}
-				return false, err
-			}
-			if err := db.SaveAssetFile(extension, version, asset, b); err != nil {
-				vlog.Err(err).Str("source", asset.Source).Msg("could not save asset file")
-				if err := db.Rollback(extension, version); err != nil {
-					vlog.Err(err).Msg("rollback failed")
-					return false, err
-				}
-				return false, err
-			}
-			downloadOccurred = true
-		}
-	}
-	elog.Debug().Msgf("fetch took %.3fs", time.Since(start).Seconds())
-	return downloadOccurred, nil
 }

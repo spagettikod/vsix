@@ -54,3 +54,60 @@ func TestSort(t *testing.T) {
 		}
 	}
 }
+
+func TestKeepVersions(t *testing.T) {
+	type testCase struct {
+		extension            Extension
+		expectedVersionCount int
+	}
+	tests := []testCase{
+		{
+			extension: Extension{
+				Name: "universal",
+				Versions: []Version{
+					{
+						Version: "2.0",
+					},
+					{
+						Version: "1.0",
+					},
+				},
+			},
+			expectedVersionCount: 1,
+		},
+		{
+			extension: Extension{
+				Name: "multiplatform",
+				Versions: []Version{
+					{
+						Version:           "1.0",
+						RawTargetPlatform: "linux-x64",
+					},
+					{
+						Version:           "1.0",
+						RawTargetPlatform: "darwin-x64",
+					},
+					{
+						Version:           "1.0",
+						RawTargetPlatform: "darwin-arm64",
+					},
+					{
+						Version:           "0.9",
+						RawTargetPlatform: "darwin-arm64",
+					},
+				},
+			},
+			expectedVersionCount: 3,
+		},
+	}
+	for _, test := range tests {
+		// fmt.Println(test.extension.LatestVersion(false))
+		// fmt.Println(len(test.extension.Versions))
+		ext := test.extension.KeepVersions(test.extension.LatestVersion(false))
+		// fmt.Println(ext.LatestVersion(false))
+		// fmt.Println(len(ext.Versions))
+		if len(ext.Versions) != test.expectedVersionCount {
+			t.Errorf("expected %v versions but got %v", test.expectedVersionCount, len(ext.Versions))
+		}
+	}
+}

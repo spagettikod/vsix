@@ -134,7 +134,7 @@ func TestFindByUniqueID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration tests when -test.short")
 	}
-	e := memdb.FindByUniqueID(false, "esbenp.prettier-vscode")
+	e := memdb.SearchByUniqueID(false, "esbenp.prettier-vscode")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
 	}
@@ -151,7 +151,7 @@ func TestFindByUniqueID(t *testing.T) {
 		t.Errorf("could not find extension %v, among extensions in the test", e[0].UniqueID())
 	}
 
-	e = memdb.FindByUniqueID(true, "esbenp.prettier-vscode")
+	e = memdb.SearchByUniqueID(true, "esbenp.prettier-vscode")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
 	}
@@ -162,6 +162,41 @@ func TestFindByUniqueID(t *testing.T) {
 
 	if e[0].Versions[0].Version != "9.3.0" {
 		t.Errorf("extected extension version %v, got %v", "9.3.0", e[0].Versions[0].Version)
+	}
+}
+
+func TestGetByUniqueID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration tests when -test.short")
+	}
+	e, found := memdb.GetByUniqueID(false, "esbenp.prettier-vscode")
+	if !found {
+		t.Fatalf("extected to find extension but did not")
+	}
+
+	if len(e.Versions) != 2 {
+		t.Errorf("extected %v extension versions, got %v", 2, len(e.Versions))
+	}
+
+	if testReq, found := getTestExtensionRequest(e.UniqueID()); found {
+		if e.LatestVersion(testReq.PreRelease) != "9.3.0" {
+			t.Errorf("extected extension version %v, got %v", "9.3.0", e.LatestVersion(testReq.PreRelease))
+		}
+	} else {
+		t.Errorf("could not find extension %v, among extensions in the test", e.UniqueID())
+	}
+
+	e, found = memdb.GetByUniqueID(true, "esbenp.prettier-vscode")
+	if !found {
+		t.Fatalf("extected to find extension but did not")
+	}
+
+	if len(e.Versions) != 1 {
+		t.Errorf("extected %v extension versions, got %v", 1, len(e.Versions))
+	}
+
+	if e.Versions[0].Version != "9.3.0" {
+		t.Errorf("extected extension version %v, got %v", "9.3.0", e.Versions[0].Version)
 	}
 }
 

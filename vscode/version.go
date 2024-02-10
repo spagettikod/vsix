@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+const (
+	PlatformUniversal string = "universal"
+)
+
 type Version struct {
 	Version           string     `json:"version"`
 	RawTargetPlatform string     `json:"targetPlatform,omitempty"`
@@ -68,7 +72,7 @@ func (v Version) String() string {
 
 func (v Version) TargetPlatform() string {
 	if v.RawTargetPlatform == "" {
-		return "universal"
+		return PlatformUniversal
 	}
 	return v.RawTargetPlatform
 }
