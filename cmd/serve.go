@@ -32,7 +32,7 @@ func init() {
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
 	serveCmd.Flags().StringVar(&serveCert, "cert", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
 	serveCmd.Flags().StringVar(&serveKey, "key", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
-	dbCmd.AddCommand(serveCmd)
+	rootCmd.AddCommand(serveCmd)
 }
 
 var serveCmd = &cobra.Command{

@@ -13,22 +13,30 @@ import (
 
 func init() {
 	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "limit number of results")
-	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install")
+	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install, rating, date")
 	searchCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions")
+	searchCmd.Flags().BoolVar(&nolimit, "nolimit", false, "disables the result limit, all matching results are shown")
+	searchCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "only print unique identifier")
 	rootCmd.AddCommand(searchCmd)
 }
 
 var searchCmd = &cobra.Command{
-	Use:                   "search <query>",
-	Short:                 "Search Marketplace for extensions that matches query",
+	Use:   "search [query]",
+	Short: "Query Marketplace for extensions.",
+	Long: `Search for extensions at Marketplace.
+
+Without any parameters it lists extensions at Marketplace sorted by install count.
+By default it limits the result to 20 items. Sort order and limits can be controlled
+by flags.`,
 	Example:               "  $ vsix search docker",
-	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		q := args[0]
-		if len(q) < 3 {
-			fmt.Println("query parameter must cotain atleast 3 characters")
-			os.Exit(1)
+		q := ""
+		if len(args) == 1 {
+			q = args[0]
+		}
+		if nolimit {
+			limit = 0
 		}
 		log.Info().Str("query", q).Msg("looking up extension at Marketplace")
 		sortCritera, err := parseSortCriteria(sortByFlag)
@@ -36,14 +44,24 @@ var searchCmd = &cobra.Command{
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		eqr, err := marketplace.QueryLastestVersionByText(q, limit, sortCritera).Run()
+
+		query := marketplace.QueryNoCritera(sortCritera)
+		if q != "" {
+			query = marketplace.QueryLastestVersionByText(q, sortCritera)
+		}
+
+		exts, err := query.RunAll(limit)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
-		exts := eqr.Results[0].Extensions
+
 		data := [][]string{}
 		for _, ext := range exts {
+			if quiet {
+				fmt.Println(ext.UniqueID())
+				continue
+			}
 			extData := []string{}
 			extData = append(extData, ext.UniqueID())
 			if len(ext.DisplayName) > 30 {
@@ -62,6 +80,10 @@ var searchCmd = &cobra.Command{
 				extData = append(extData, "-")
 			}
 			data = append(data, extData)
+		}
+
+		if quiet {
+			os.Exit(0)
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
@@ -86,6 +108,10 @@ func parseSortCriteria(sortBy string) (marketplace.SortCriteria, error) {
 	switch sortBy {
 	case "install":
 		return marketplace.ByInstallCount, nil
+	case "rating":
+		return marketplace.ByRating, nil
+	case "date":
+		return marketplace.ByPublishedDate, nil
 	case "none":
 		return marketplace.ByNone, nil
 	}

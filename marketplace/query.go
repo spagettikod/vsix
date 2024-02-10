@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -82,6 +82,8 @@ const (
 	FilterTypeTarget        FilterType = 8
 	FilterTypeFeatured      FilterType = 9
 	FilterTypeSearchText    FilterType = 10
+
+	MaximumPageSize = 1000
 
 	debugEnvVar = "VSIX_DEBUG"
 )
@@ -179,9 +181,38 @@ func (q Query) IsValid() bool {
 	return false
 }
 
+// RunAll executes the Run function until all pages with extensions are fetched.
+func (q Query) RunAll(limit int) ([]vscode.Extension, error) {
+	if limit == 0 || limit >= MaximumPageSize {
+		q.Filters[0].PageSize = MaximumPageSize
+	} else {
+		q.Filters[0].PageSize = limit
+	}
+
+	exts := []vscode.Extension{}
+	for {
+		eqr, err := q.Run()
+		if err != nil {
+			return exts, err
+		}
+		exts = append(exts, eqr.Results[0].Extensions...)
+		// if there is a limit set (limit is larger than 0) exit when we've got the requested number of extensions or more
+		if (limit > 0 && len(exts) >= limit) || len(eqr.Results[0].Extensions) < q.Filters[0].PageSize {
+			break
+		}
+		q.Filters[0].PageNumber = q.Filters[0].PageNumber + 1
+	}
+	// if there is no limit (limit is zero), we return all extensions found, otherwise slice the correct number of extensions
+	if limit == 0 || len(exts) < limit {
+		return exts, nil
+	} else {
+		return exts[:limit], nil
+	}
+}
+
 func (q Query) Run() (extensionQueryResponse, error) {
 	if _, debug := os.LookupEnv(debugEnvVar); debug {
-		ioutil.WriteFile("query.json", []byte(q.ToJSON()), 0644)
+		os.WriteFile("query.json", []byte(q.ToJSON()), 0644)
 	}
 	eqr := extensionQueryResponse{}
 	req, err := http.NewRequest(http.MethodPost, "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery", strings.NewReader(q.ToJSON()))
@@ -198,12 +229,12 @@ func (q Query) Run() (extensionQueryResponse, error) {
 	if resp.StatusCode != http.StatusOK {
 		return eqr, fmt.Errorf("marketplace.visualstudio.com returned HTTP %v", resp.StatusCode)
 	}
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return eqr, err
 	}
 	if _, debug := os.LookupEnv(debugEnvVar); debug {
-		ioutil.WriteFile("response.json", b, 0644)
+		os.WriteFile("response.json", b, 0644)
 	}
 	err = json.Unmarshal(b, &eqr)
 	if err != nil {
@@ -227,7 +258,18 @@ func (q Query) SortBy() SortCriteria {
 	return q.Filters[0].SortBy
 }
 
-func QueryLastestVersionByText(query string, limit int, sortBy SortCriteria) Query {
+func QueryNoCritera(sortBy SortCriteria) Query {
+	q := NewQuery()
+	q.Filters[0].Criteria = []Criteria{}
+	q.Filters[0].Criteria = append(q.Filters[0].Criteria, MSVSCodeCriteria)
+	q.Filters[0].Criteria = append(q.Filters[0].Criteria, SomeUnknownCriteria)
+	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags | FlagIncludeStatistics
+	q.Filters[0].SortBy = sortBy
+	// q.Filters[0].PageSize = limit
+	return q
+}
+
+func QueryLastestVersionByText(query string, sortBy SortCriteria) Query {
 	q := NewQuery()
 	q.AddCriteria(Criteria{
 		FilterType: FilterTypeSearchText,
@@ -235,7 +277,7 @@ func QueryLastestVersionByText(query string, limit int, sortBy SortCriteria) Que
 	})
 	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags | FlagIncludeStatistics
 	q.Filters[0].SortBy = sortBy
-	q.Filters[0].PageSize = limit
+	// q.Filters[0].PageSize = limit
 	return q
 }
 

@@ -211,7 +211,7 @@ func (db *DB) SaveExtensionMetadata(e vscode.Extension) error {
 }
 
 func (db *DB) SaveVersionMetadata(e vscode.Extension, v vscode.Version) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("target_platform", v.RawTargetPlatform).Logger()
 
 	elog.Debug().Msg("saving version metadata file")
 	if err := db.saveVersionMetadata(e, v); err != nil {
@@ -227,9 +227,9 @@ func (db *DB) SaveVersionMetadata(e vscode.Extension, v vscode.Version) error {
 }
 
 func (db *DB) SaveAssetFile(e vscode.Extension, v vscode.Version, a vscode.Asset, b []byte) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
+	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("target_platform", v.RawTargetPlatform).Logger()
 	filename := AssetFile(db.root, e, v, a)
-	elog.Info().Str("source", a.Source).Str("destination", filename).Msg("downloading")
+	elog.Debug().Str("source", a.Source).Str("destination", filename).Msg("writing to file")
 	f, err := db.fs.Create(filename)
 	if err != nil {
 		elog.Err(err).Str("source", a.Source).Str("destination", filename).Msg("could not create file")
@@ -254,12 +254,12 @@ func (db *DB) SaveAssetFile(e vscode.Extension, v vscode.Version, a vscode.Asset
 // VersionExists returns true if the given extension and version can be found. It
 // returns false if the extension can not be found.
 func (db *DB) VersionExists(uniqueID string, version vscode.Version) bool {
-	exts := db.FindByUniqueID(false, uniqueID)
+	ext, found := db.GetByUniqueID(false, uniqueID)
 	// if the extensions could not be found the version does not exist
-	if len(exts) == 0 {
+	if !found {
 		return false
 	}
-	for _, v := range exts[0].Versions {
+	for _, v := range ext.Versions {
 		if v.Equals(version) {
 			return true
 		}
@@ -270,12 +270,12 @@ func (db *DB) VersionExists(uniqueID string, version vscode.Version) bool {
 // GetVersion returns true and the found version if the given extension and version can be found. It
 // returns false if the extension can not be found.
 func (db *DB) GetVersion(uniqueID string, version vscode.Version) (vscode.Version, bool) {
-	exts := db.FindByUniqueID(false, uniqueID)
+	ext, found := db.GetByUniqueID(false, uniqueID)
 	// if the extensions could not be found the version does not exist
-	if len(exts) == 0 {
+	if !found {
 		return vscode.Version{}, false
 	}
-	for _, v := range exts[0].Versions {
+	for _, v := range ext.Versions {
 		if v.ID() == version.ID() {
 			return v, true
 		}
@@ -283,10 +283,26 @@ func (db *DB) GetVersion(uniqueID string, version vscode.Version) (vscode.Versio
 	return vscode.Version{}, false
 }
 
-// FindByUniqueID returns an array of extensions matching a list of uniqueID's. If keepLatestVersion is true only the latest
+// GetByUniqueID returns a extensions matching a uniqueID. If keepLatestVersion is true only the latest
+// version is keep of all available version for returned extensions. When false all versions for an
+// extension are included. This function ignores case.
+func (db *DB) GetByUniqueID(keepLatestVersion bool, uniqueID string) (vscode.Extension, bool) {
+	normalizedUniqueID := strings.ToLower(uniqueID)
+	for _, i := range db.items {
+		if strings.ToLower(i.UniqueID()) == normalizedUniqueID {
+			if keepLatestVersion {
+				i = i.KeepVersions(i.LatestVersion(true))
+			}
+			return i.Copy(), true
+		}
+	}
+	return vscode.Extension{}, false
+}
+
+// SearchByUniqueID returns an array of extensions matching a list of uniqueID's. If keepLatestVersion is true only the latest
 // version is keep of all available version for returned extensions. When false all versions for an extension are included.
 // This function ignores case.
-func (db *DB) FindByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vscode.Extension {
+func (db *DB) SearchByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vscode.Extension {
 	queryMap := map[string]bool{}
 
 	for _, id := range uniqueIDs {
@@ -369,7 +385,7 @@ func (db *DB) Run(q marketplace.Query) (vscode.Results, error) {
 		uniqueIDs := q.CriteriaValues(marketplace.FilterTypeExtensionName)
 		if len(uniqueIDs) > 0 {
 			db.dblog.Debug().Msgf("found array of extension names in query: %v", uniqueIDs)
-			extensions = append(extensions, db.FindByUniqueID(q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), uniqueIDs...)...)
+			extensions = append(extensions, db.SearchByUniqueID(q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly), uniqueIDs...)...)
 			db.dblog.Debug().Msgf("extension name database query found %v extension", len(extensions))
 		}
 

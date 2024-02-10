@@ -15,7 +15,7 @@ var dry bool // execute in dry run mode
 func init() {
 	pruneCmd.Flags().IntVar(&keep, "keep", 1, "number of versions to keep")
 	pruneCmd.Flags().BoolVar(&dry, "dry", false, "execute command without actually removing anything")
-	dbCmd.AddCommand(pruneCmd)
+	rootCmd.AddCommand(pruneCmd)
 }
 
 var pruneCmd = &cobra.Command{

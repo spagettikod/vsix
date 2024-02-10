@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/spagettikod/vsix/database"
@@ -13,12 +14,12 @@ import (
 var (
 	memdb          *database.DB
 	testExtensions = []marketplace.ExtensionRequest{
-		{UniqueID: "golang.Go", Version: "0.31.1", TargetPlatforms: []string{"linux-x64"}},
-		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0", TargetPlatforms: []string{"linux-x64"}},
-		{UniqueID: "esbenp.prettier-vscode", Version: "9.2.0", TargetPlatforms: []string{"linux-x64"}},
-		{UniqueID: "__no_real_extension", Version: "0.0.0", TargetPlatforms: []string{"linux-x64"}},
+		{UniqueID: "golang.Go", Version: "0.31.1", TargetPlatforms: []string{"universal"}},
+		{UniqueID: "esbenp.prettier-vscode", Version: "9.3.0", TargetPlatforms: []string{"universal"}},
+		{UniqueID: "esbenp.prettier-vscode", Version: "9.2.0", TargetPlatforms: []string{"universal"}},
+		{UniqueID: "__no_real_extension", Version: "0.0.0", TargetPlatforms: []string{"universal"}},
 		// pre-release and an extension pack, will result in also downloading ms-vscode-remote.remote-ssh-edit
-		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315", PreRelease: true, TargetPlatforms: []string{"linux-x64"}},
+		{UniqueID: "ms-vscode-remote.remote-ssh", Version: "0.77.2022030315", PreRelease: true, TargetPlatforms: []string{"universal"}},
 	}
 	expectedDownloadCount         = 4
 	expectedErrorCount            = 1
@@ -50,11 +51,11 @@ func TestIntegrationTests(t *testing.T) {
 	// downloads, errors := downloadExtensions(testExtensions, []string{"linux-x64"}, true, memdb)
 	downloads, errors := 0, 0
 	for _, testExtension := range testExtensions {
-		d, err := FetchExtension(testExtension, memdb, false, []string{testExtension.UniqueID}, "test")
-		if err != nil {
+		result := fetchExtension(testExtension, memdb, []string{testExtension.UniqueID}, "test")
+		if result.Err != nil {
 			errors++
 		}
-		if d {
+		if result.Downloads > 0 {
 			downloads++
 		}
 	}
@@ -125,7 +126,7 @@ func TestFindByUniqueID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration tests when -test.short")
 	}
-	e := memdb.FindByUniqueID(false, "esbenp.prettier-vscode")
+	e := memdb.SearchByUniqueID(false, "esbenp.prettier-vscode")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
 	}
@@ -142,7 +143,7 @@ func TestFindByUniqueID(t *testing.T) {
 		t.Errorf("could not find extension %v, among extensions in the test", e[0].UniqueID())
 	}
 
-	e = memdb.FindByUniqueID(true, "esbenp.prettier-vscode")
+	e = memdb.SearchByUniqueID(true, "esbenp.prettier-vscode")
 	if len(e) != 1 {
 		t.Fatalf("extected %v extensions, got %v", 1, len(e))
 	}
@@ -294,3 +295,66 @@ func TestSearch(t *testing.T) {
 // 	// <-ch
 // 	fmt.Println("done", <-ch)
 // }
+
+func TestPlatformsToAdd(t *testing.T) {
+	type testCase struct {
+		existingVersions   []vscode.Version
+		requestedPlatforms []string
+		expectedPlatforms  []string
+	}
+
+	testCases := []testCase{
+		{
+			existingVersions: []vscode.Version{
+				{Version: "1.0", RawTargetPlatform: "linux-arm64"},
+				{Version: "1.0", RawTargetPlatform: "darwin-x64"},
+				{Version: "1.0", RawTargetPlatform: "win32-x64"},
+			},
+			requestedPlatforms: []string{"linux-arm64"},
+			expectedPlatforms:  []string{},
+		},
+		{
+			existingVersions: []vscode.Version{
+				{Version: "1.0", RawTargetPlatform: "linux-arm64"},
+				{Version: "1.0", RawTargetPlatform: "darwin-x64"},
+				{Version: "1.0", RawTargetPlatform: "win32-x64"},
+			},
+			requestedPlatforms: []string{"darwin-arm64"},
+			expectedPlatforms:  []string{"darwin-arm64"},
+		},
+		{
+			existingVersions: []vscode.Version{
+				{Version: "1.0", RawTargetPlatform: "linux-arm64"},
+				{Version: "1.0", RawTargetPlatform: "darwin-x64"},
+				{Version: "1.0", RawTargetPlatform: "win32-x64"},
+			},
+			requestedPlatforms: []string{"darwin-arm64", "linux-arm64"},
+			expectedPlatforms:  []string{"darwin-arm64"},
+		},
+		{
+			existingVersions:   []vscode.Version{},
+			requestedPlatforms: []string{"darwin-arm64", "linux-arm64"},
+			expectedPlatforms:  []string{"darwin-arm64", "linux-arm64"},
+		},
+		{
+			existingVersions:   []vscode.Version{},
+			requestedPlatforms: []string{},
+			expectedPlatforms:  []string{},
+		},
+		{
+			existingVersions: []vscode.Version{
+				{Version: "1.0", RawTargetPlatform: "linux-arm64"},
+				{Version: "1.0", RawTargetPlatform: "darwin-x64"},
+				{Version: "1.0", RawTargetPlatform: "win32-x64"},
+			},
+			requestedPlatforms: []string{},
+			expectedPlatforms:  []string{},
+		},
+	}
+	for i, tc := range testCases {
+		platformsToAdd := platformsToAdd(tc.requestedPlatforms, tc.existingVersions)
+		if !slices.Equal(platformsToAdd, tc.expectedPlatforms) {
+			t.Errorf("#%v: expected platforms: %v but got: %v", i+1, tc.expectedPlatforms, platformsToAdd)
+		}
+	}
+}

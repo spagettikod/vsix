@@ -42,7 +42,10 @@ var (
 	targetPlatforms              []string // used by sub-commands
 	preRelease                   bool     // used by sub-commands
 	force                        bool     // used by sub-commands
+	quiet                        bool     // used by sub-commands (search)
+	nolimit                      bool     // used by sub-commands (search)
 	keep                         int      // used by sub-commands
+	threads                      int      // used by sub-commands
 	ErrFileExists                error    = errors.New("extension has already been downloaded")
 	ErrVersionNotFound           error    = errors.New("could not find version at Marketplace")
 	ErrOutDirNotFound            error    = errors.New("output dir does not exist")

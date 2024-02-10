@@ -1,10 +1,10 @@
-FROM golang:1.21.1 AS test
+FROM golang:1.22.0 AS test
 LABEL vsix_intermediate=true
 WORKDIR /vsix
 COPY ./ .
 RUN CGO_ENABLED=0 go test -ldflags="-extldflags=-static" ./...
 
-FROM --platform=$BUILDPLATFORM golang:1.21.1 AS build
+FROM --platform=$BUILDPLATFORM golang:1.22.0 AS build
 LABEL vsix_intermediate=true
 ARG VERSION
 ARG TARGETOS TARGETARCH

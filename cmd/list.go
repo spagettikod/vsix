@@ -10,10 +10,10 @@ import (
 )
 
 func init() {
-	dbCmd.AddCommand(dbListCmd)
+	rootCmd.AddCommand(listCmd)
 }
 
-var dbListCmd = &cobra.Command{
+var listCmd = &cobra.Command{
 	Use:                   "list",
 	Aliases:               []string{"ls"},
 	Short:                 "List extensions in the database",

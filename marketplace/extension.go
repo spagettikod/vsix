@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
@@ -15,6 +16,7 @@ type ExtensionRequest struct {
 	Version         string
 	TargetPlatforms []string
 	PreRelease      bool
+	Force           bool
 }
 
 var (
@@ -24,28 +26,12 @@ var (
 )
 
 func Deduplicate(ers []ExtensionRequest) []ExtensionRequest {
-	result := []ExtensionRequest{}
-	for _, er := range ers {
-		if er.UniqueID == "" {
-			continue
+	return slices.CompactFunc(ers, func(a, b ExtensionRequest) bool {
+		if a.UniqueID == "" || b.UniqueID == "" {
+			return true
 		}
-		// add the first value
-		if len(result) == 0 {
-			result = append(result, er)
-			continue
-		}
-		found := false
-		for _, er2 := range result {
-			if er.Equals(er2) {
-				found = true
-				break
-			}
-		}
-		if !found {
-			result = append(result, er)
-		}
-	}
-	return result
+		return a.Equals(b)
+	})
 }
 
 func FetchExtension(uniqueID string) (vscode.Extension, error) {
@@ -82,16 +68,19 @@ func (er ExtensionRequest) Equals(er2 ExtensionRequest) bool {
 	return false
 }
 
+// ValidTargetPlatform returns true if the given versions target platform
+// matches the platforms that were requested in the ExtensionRequest.
 func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
+	// no target platform was given, all platforms are valid
 	if len(pe.TargetPlatforms) == 0 {
 		return true
 	}
 	// empty RawTargetPlatform means universal and is always valid
-	if v.RawTargetPlatform == "" {
-		return true
-	}
+	// if v.RawTargetPlatform == "" {
+	// 	return true
+	// }
 	for _, tp := range pe.TargetPlatforms {
-		if v.RawTargetPlatform == tp {
+		if v.TargetPlatform() == tp {
 			return true
 		}
 	}
