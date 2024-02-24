@@ -1,9 +1,11 @@
 package vscode
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 )
 
 type AssetTypeKey string
@@ -23,6 +25,7 @@ const (
 	IconsSmall       AssetTypeKey = "Microsoft.VisualStudio.Services.Icons.Small"
 	VSIXManifest     AssetTypeKey = "Microsoft.VisualStudio.Services.VsixManifest"
 	VSIXPackage      AssetTypeKey = "Microsoft.VisualStudio.Services.VSIXPackage"
+	VSIXSignature    AssetTypeKey = "Microsoft.VisualStudio.Services.VsixSignature"
 )
 
 func StrToAssetType(assetType string) (AssetTypeKey, error) {
@@ -43,6 +46,8 @@ func StrToAssetType(assetType string) (AssetTypeKey, error) {
 		return VSIXManifest, nil
 	case string(VSIXPackage):
 		return VSIXPackage, nil
+	case string(VSIXSignature):
+		return VSIXSignature, nil
 	default:
 		return "nil", fmt.Errorf("unknown asset type: %v", assetType)
 	}
@@ -62,4 +67,22 @@ func (a Asset) Download() ([]byte, error) {
 		return []byte{}, err
 	}
 	return ioutil.ReadAll(resp.Body)
+}
+
+// Validate return true if the asset is valid. It checks if
+// the file exist and that it's not a directory.
+func (a Asset) Validate() (bool, error) {
+	fi, err := os.Stat(a.Path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Println("not exists", a.Path)
+			return false, nil
+		}
+		return false, err
+	}
+	if fi.IsDir() {
+		fmt.Println("isdir")
+		return false, nil
+	}
+	return true, nil
 }

@@ -183,6 +183,9 @@ func (e Extension) String() string {
 
 // LatestVersion returns the latest version number for the extension with the given unique ID.
 func (e Extension) LatestVersion(preRelease bool) string {
+	if len(e.Versions) == 0 {
+		return ""
+	}
 	if preRelease {
 		return e.Versions[0].Version
 	}

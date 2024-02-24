@@ -47,18 +47,25 @@ type DBStats struct {
 	LoadDuration time.Duration
 }
 
-func open(fs afero.Fs, root string, autoreload bool) (*DB, error) {
+func new(root string, fs afero.Fs) (*DB, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
 	dblog := log.With().Str("component", "database").Str("path", absRoot).Logger()
-	db := &DB{
+	return &DB{
 		root:    absRoot,
 		items:   []vscode.Extension{},
 		modFile: path.Join(root, modFilename),
 		dblog:   dblog,
 		fs:      fs,
+	}, nil
+}
+
+func open(fs afero.Fs, root string, autoreload bool) (*DB, error) {
+	db, err := new(root, fs)
+	if err != nil {
+		return nil, err
 	}
 	if err := db.load(); err != nil {
 		return nil, err
@@ -493,10 +500,11 @@ func (db *DB) load() error {
 			db.dblog.Error().Err(err).Str("path", extensionRoot).Msg("error while loading extension, skipping")
 			continue
 		}
-		versions := db.listVersions(ext)
+		versions, _ := db.listVersions(ext)
 		if len(versions) == 0 {
-			db.dblog.Error().Str("path", extensionRoot).Msg("extension does not have any versions, skipping")
-			continue
+			// db.dblog.Info().Str("path", extensionRoot).Msg("extension does not have any versions, skipping")
+			db.dblog.Info().Str("path", extensionRoot).Msg("extension does not have any versions")
+			// continue
 		}
 		for _, version := range versions {
 			versionRoot := VersionDir(db.root, ext, version)
@@ -532,16 +540,18 @@ func (db *DB) listExtensions() []string {
 	return files
 }
 
-func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
+func (db *DB) listVersions(ext vscode.Extension) ([]vscode.Version, []string) {
 	db.dblog.Debug().Str("path", ext.Path).Msg("list extension versions")
 	matches, _ := afero.Glob(afero.NewBasePathFs(db.fs, ext.Path), "*/*")
 	// matches, _ := fs.Glob(os.DirFS(ext.Path), "*/*")
 	versions := []vscode.Version{}
+	erroneousVersionRoots := []string{}
 	for _, m := range matches {
 		versionRoot := path.Join(ext.Path, m)
 		fi, err := db.fs.Stat(versionRoot)
 		if err != nil {
 			db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
+			erroneousVersionRoots = append(erroneousVersionRoots, versionRoot)
 			continue
 		}
 		if fi.IsDir() {
@@ -551,10 +561,12 @@ func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
 			b, err := afero.ReadFile(db.fs, metafile)
 			if err != nil {
 				db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
+				erroneousVersionRoots = append(erroneousVersionRoots, versionRoot)
 				continue
 			}
 			if err := json.Unmarshal(b, &v); err != nil {
 				db.dblog.Error().Err(err).Str("path", ext.Path).Msg("error while loading version, skipping")
+				erroneousVersionRoots = append(erroneousVersionRoots, versionRoot)
 				continue
 			}
 			versions = append(versions, v)
@@ -562,7 +574,7 @@ func (db *DB) listVersions(ext vscode.Extension) []vscode.Version {
 			db.dblog.Debug().Str("file", m).Msg("not a directory, skipping")
 		}
 	}
-	return versions
+	return versions, erroneousVersionRoots
 }
 
 func (db *DB) loadExtension(extensionRoot string) (vscode.Extension, error) {
