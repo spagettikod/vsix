@@ -62,6 +62,8 @@ func init() {
 // Execute TODO
 func Execute(version string) {
 	rootCmd.Version = version
+	rootCmd.SetVersionTemplate(`{{printf "%s" .Version}}
+`)
 	log.Logger = log.With().Str("vsix_version", rootCmd.Version).Logger()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
