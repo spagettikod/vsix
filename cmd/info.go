@@ -17,8 +17,18 @@ func init() {
 }
 
 var infoCmd = &cobra.Command{
-	Use:                   "info <identifier>",
-	Short:                 "Display package information from Marketplace",
+	Use:   "info <identifier>",
+	Short: "Display package information from Marketplace",
+	Long: `Display package information from Marketplace.
+
+This command displays much of the same basic information about
+an extension that can be found at Marketplace. 
+
+Extension pack
+--------------
+If the extension is an extensions pack this section will show
+which extentions the pack includes.
+`,
 	Example:               "  $ vsix info golang.Go",
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,

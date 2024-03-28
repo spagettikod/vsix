@@ -10,22 +10,25 @@ import (
 )
 
 func init() {
+	listCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	rootCmd.AddCommand(listCmd)
 }
 
 var listCmd = &cobra.Command{
-	Use:                   "list",
-	Aliases:               []string{"ls"},
-	Short:                 "List extensions in the database",
-	Long:                  `List extensions in the database.`,
-	Example:               "  $ vsix db list",
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List extensions from the local storage",
+	Long: `List extensions from the local storage.
+	
+Command will list all extension with their unique identifier.`,
+	Example:               "  $ vsix list --data extensions",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		logger := log.With().Str("path", dbPath).Logger()
 		start := time.Now()
 		db, err := database.OpenFs(dbPath, false)
 		if err != nil {
-			log.Fatal().Err(err).Str("database_root", dbPath).Msg("could not open database")
+			log.Fatal().Err(err).Str("data_root", dbPath).Msg("could not open folder")
 		}
 		exts := db.List(true)
 		for _, ext := range exts {

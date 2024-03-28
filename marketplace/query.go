@@ -96,13 +96,6 @@ var (
 	ErrInvalidQuery           = errors.New("query is not valid, it might be incomplete or malformatted")
 )
 
-var latestVersionQueryTemplate2 = Filter{
-	Criteria: []Criteria{
-		MSVSCodeCriteria,
-		SomeUnknownCriteria,
-	},
-}
-
 type extensionQueryResponse struct {
 	Results []struct {
 		Extensions []vscode.Extension `json:"extensions"`

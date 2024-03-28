@@ -18,6 +18,7 @@ var dry bool // execute in dry run mode
 var rmEmptyExt bool
 
 func init() {
+	pruneCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	pruneCmd.Flags().BoolVar(&rmEmptyExt, "rm-empty-ext", false, "remove extensions without any versions")
 	pruneCmd.Flags().IntVar(&keep, "keep-versions", 0, "number of versions to keep, 0 keeps all (default 0)")
 	pruneCmd.Flags().BoolVar(&dry, "dry", false, "execute command without actually removing anything")
@@ -25,36 +26,42 @@ func init() {
 }
 
 var pruneCmd = &cobra.Command{
-	Use:   "prune",
-	Short: "Prune the database",
-	Long: `Prune the database.
+	Use:   "prune [flags]",
+	Short: "Prune local storage",
+	Long: `Prune local storage.
 
-By default, without any flags this command will clean the database from any files
+By default, without any flags, this command will clean the local storage from any files
 and folders that don't belong there. These files and folders will be removed unless
 running with the --dry flag.
 
-If the command finds an extension without any version it will print these giving you
-the chance to add versions to the extension with the add-command. If you instead
-want these removed you can run the command with the flag --rm-empty-ext.
+If the command finds an extension without a version it will print the extensions
+unique identifier giving you a chance to add versions to the extension with the
+add-command. If you instead want the extensions removed you can run the command with
+the flag --rm-empty-ext.
 
 Pruning versions
-================
+----------------
 Adding the --keep-versions X flag will keep the X latest versions and remove the rest.
 For example: --keep-versions 2, will remove all versions except the latest two.
 `,
-	Example:               "  $ vsix db prune --keep-versions 2",
+	Example:               "  $ vsix prune --data extensions --keep-versions 2",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		logger := log.With().Str("path", dbPath).Str("command", "prune").Logger()
+		p, err := filepath.Abs(dbPath)
+		if err != nil {
+			log.Fatal().Str("command", "prune").Err(err).Send()
+		}
+
+		logger := log.With().Str("path", p).Str("command", "prune").Logger()
 		start := time.Now()
 
-		// begin by cleaning the database
-		cleanResult, err := database.CleanDBFiles(dbPath)
+		// begin by cleaning local storage
+		cleanResult, err := database.CleanDBFiles(p)
 		if err != nil {
 			logger.Fatal().Err(err).Send()
 		}
 		if len(cleanResult.Removed) == 0 && len(cleanResult.Optional) == 0 {
-			logger.Info().Msg("database did not need any cleanup")
+			logger.Info().Msg("local storage did not need any cleanup")
 		}
 		for _, file := range cleanResult.Removed {
 			logger.Info().Msgf("removing file: %s", file)
@@ -66,7 +73,7 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 			if dry || !rmEmptyExt {
 				fmt.Printf("the following extensions did not have any versions, use \"vsix add\" to add versions or run this command again with the flag --rm-empty-ext:\n\n")
 				for _, file := range cleanResult.Optional {
-					file, _ = filepath.Rel(dbPath, file)
+					file, _ = filepath.Rel(p, file)
 					fmt.Printf("   %s\n", strings.Replace(file, "/", ".", 1))
 				}
 			}
@@ -81,9 +88,9 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 		}
 
 		if keep > 0 {
-			db, err := database.OpenFs(dbPath, false)
+			db, err := database.OpenFs(p, false)
 			if err != nil {
-				log.Fatal().Err(err).Str("database_root", dbPath).Msg("could not open database")
+				log.Fatal().Err(err).Str("data_root", p).Msg("could not open folder")
 			}
 			exts := db.List(false)
 			for _, ext := range exts {

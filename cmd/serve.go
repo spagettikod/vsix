@@ -29,6 +29,7 @@ const (
 )
 
 func init() {
+	serveCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
 	serveCmd.Flags().StringVar(&serveCert, "cert", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
 	serveCmd.Flags().StringVar(&serveKey, "key", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
@@ -37,28 +38,23 @@ func init() {
 
 var serveCmd = &cobra.Command{
 	Use:   "serve [flags] <external URL>",
-	Short: "Serve database extensions to Visual Studio Code",
-	Long: `This command will start a HTTPS server that is compatible with Visual Studio Code.
+	Short: "Run your own marketplace and serve the extensions in your local storage",
+	Long: `Run your own marketplace and serve the extensions in your local storage.
+
+This command will start a HTTPS server that is compatible with Visual Studio Code.
 When setup you can browse, search and install extensions previously downloaded
-using the sync command. If sync is run and new extensions are downloaded
-while the server is running it will automatically update with the newly
-downloaded extensions. 
+using the add command. If the update-command is run and new extensions are
+downloaded while the serve-command is running it will automatically update with
+the newly downloaded extensions. 
 
 To enable Visual Studio Code integration you must change the tag serviceUrl in
 the file project.json in your Visual Studio Code installation. On MacOS, for
 example, the file is located at
 /Applications/Visual Studio Code.app/Contents/Resources/app/product.json. Set
-the URL to your server, for example https://vsix.example.com:8080, see Examples
+the URL to your server, for example https://vsix.example.com:8080, see examples
 below.
 `,
-	Example: `  $ vsix serve --data _data https://www.example.com/vsix myserver.crt myserver.key
-
-  $ docker run -d -p 8443:8080 \
-	-v $(pwd):/data \
-	-v myserver.crt:/server.crt:ro \
-	-v myserver.key:/server.key:ro \
-	spagettikod/vsix serve https://www.example.com/vsix:8443`,
-	// Args:                  cobra.MinimumNArgs(3),
+	Example:               `  $ vsix serve --data extensions --cert myserver.crt --key myserver.key https://www.example.com/vsix`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		externalURL := EnvOrArg("VSIX_EXTERNAL_URL", args, 0)
@@ -239,7 +235,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 						hlog.FromRequest(r).Info().Msg("query contained in the request is not valid")
 						http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 					} else {
-						serverError(w, r, fmt.Errorf("error while querying the database: %v", err))
+						serverError(w, r, fmt.Errorf("error while querying the local storage: %v", err))
 					}
 					return
 				}

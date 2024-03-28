@@ -1,46 +1,110 @@
 # vsix
-Private proxy for Visual Studio Code extensions. It serves extensions locally to your Visual Studio Code clients and keeps requested extensions in sync with the offical Visual Studio Code Marketplace. The tool can be useful for keeping an off line stash of extensions in air gapped environments.     
+Host your private [Marketplace](https://marketplace.visualstudio.com/) by downloading and serving extensions to Visual Studio Code in your own environment. The tool can be useful when working in air gapped environments but you still want access to Visual Studio Code extensions.
 
 ## Installation
-vsix is distributed as a single binary file. The current release support the operating systems
-and architectures below.
+vsix is distributed as a single binary file. The current release support the operating systems and architectures below.
 
-### Docker
-There is a Docker image available with `vsix`.
+<details>
+<summary>macOS (Apple Silicon)</summary>
+
+```shell
+curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.macos-arm64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix2.2.0.macos-arm64.tar.gz
+```
+</details>
+
+<details>
+<summary>Linux</summary>
+
+```shell
+curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.linux-amd64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix2.2.0.linux-amd64.tar.gz
+```
+</details>
+
+<details>
+<summary>Docker</summary>
 
 ```docker
 docker run --rm -it spagettikod/vsix info golang.Go
 ```
 
-You can bind mount folders to `/data` in the container when syncing extensions.
+You can bind mount folders to `/data` in the container when working with downloaded extensions.
 
 ```docker
 docker run --rm -it \
       -v $(pwd):/data \
-      -v my_extensions_to_sync:/my_extensions_to_sync
-      spagettikod/vsix sync /my_extensions_to_sync
+      spagettikod/vsix update /my_extensions_to_sync
 ```
+</details>
 
-### macOS
-This will install the latest version on macOS running on Apple Silicon.
-
-```
-curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.macos-arm64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix2.2.0.macos-arm64.tar.gz
-```
-
-### Linux
-This will install the latest version on many Linux distros as long as you have curl installed.
+## Getting Started
+Create a folder where you store downloaded extensions.
 
 ```
-curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.linux-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix2.2.0.linux-amd64.tar.gz
+mkdir extensions
 ```
+
+Add a few extensions you would like to have available off-line.
+
+```
+vsix add --data extensions golang.Go gruntfuggly.todo-tree
+```
+
+Start your own marketplace serving the extensions you added above.
+
+```
+vsix serve --data extensions https://localhost:8080_apis/public/gallery
+```
+
+If you run your own DNS you can hijack `marketplace.visualstudio.com` and point it to your local server
+
+1. Open `product.json`. On macOS (if Visual Studio Code is installed in the Applications folder) this file is located at `/Applications/Visual Studio Code.app/Contents/Resources/app/product.json`.
+1. Find the `extensionGallery` block and edit the `serviceUrl` to point to your server. For example, using the example above `https://vsix.myserver.com/extensions`:
+      ```json
+      ...
+      "extensionsGallery": {
+		"serviceUrl": "https://marketplace.visualstudio.com/_apis/public/gallery",
+	},
+      ...
+      ```
+1. Restart Visual Studio Code and start using extensions from your own marketplace.
 
 ## Usage
 Most commands rely on knowing the "Unique Identifier" for a package. This identifier can be found in the "More Info" section on the Marketplace web page for an extension, for example [the Go extension](https://marketplace.visualstudio.com/items?itemName=golang.Go). It is also visible when running the `search` command.
 
 There is build in documentation in the tool itself by running `vsix <command> --help`.
+
+### `add`
+Add extensions to your local storage. This will download the latest version of the extension and create necessary metadata to later serve the extension locally.
+
+```shell
+vsix --data extensions add golang.Go
+```
+
+You can add multiple extensions at once:
+```shell
+vsix --data extensions add golang.Go ms-python.python
+```
+
+#### Multiple platforms
+Some extensions support multiple platforms. If you don't have or use all platforms you can limit which platforms you want to add. When you run the `update`-command it will only update those platforms that were added. If you want to add a platform later on you can add it by running the `add` command again.
+
+This example will add an extension limiting it to the `darwin-arm64` platform.
+```shell
+vsix --data extensions add --platforms darwin-arm64 redhat.java
+```
+
+When adding multiple extensions and limiting to certain platforms you must remember to include the `universal` platform, which most extensions belong to. Otherwise these will be added. A good rule of thumb is to always add all platforms you want to support.
+```shell
+vsix --data extensions add --platforms universal,darwin-arm64,linux-amd64,win32-arm64 golang.Go redhat.java
+```
+
+#### Pre-release
+```shell
+vsix --data extensions add golang.Go ms-python.python
+```
+
 
 ## Running your local Marketplace
 By syncing extensions from the official maketplace and hosting your own marketplace you can run a local proxy with extensions. To achieve this we will do the following:

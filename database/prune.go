@@ -1,6 +1,7 @@
 package database
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -25,14 +26,22 @@ func NewPruneResult() PruneResult {
 // It does not check if the files in the version metadata are there or if there are more files
 // in the lowest folder than in the metadata file.
 func CleanDBFiles(root string) (PruneResult, error) {
-	return process(os.DirFS("."), root, rootProcessor)
+	return process(os.DirFS(root), ".", rootProcessor)
 }
 
 func process(fsys fs.FS, dir string, processor DirEntryProcessor) (PruneResult, error) {
 	result := NewPruneResult()
 	files, err := fs.ReadDir(fsys, dir)
 	if err != nil {
-		fmt.Println(err)
+		if errors.Is(err, fs.ErrNotExist) {
+			if dir == "." {
+				fmt.Printf("prune: could not find directory %s\n", fsys)
+			} else {
+				fmt.Printf("prune: could not find directory %s/%s\n", fsys, dir)
+			}
+		} else {
+			fmt.Printf("prune.process: %s\n", err)
+		}
 		os.Exit(1)
 	}
 	for _, file := range files {
