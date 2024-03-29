@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -61,7 +60,7 @@ below.
 		// setup URLs and server root
 		server, apiRoot, assetRoot, err := parseEndpoints(externalURL)
 		if err != nil {
-			fmt.Printf("external URL %s is not a valid URL\n", externalURL)
+			fmt.Printf("given URL is not valid: %s\n", externalURL)
 			os.Exit(1)
 		}
 
@@ -138,6 +137,10 @@ func EnvOrArg(env string, args []string, idx int) string {
 }
 
 func parseEndpoints(externalURL string) (server string, apiRoot string, assetRoot string, err error) {
+	if len(externalURL) < 5 {
+		err = fmt.Errorf("invalid URL")
+		return
+	}
 	if externalURL[:5] != "https" && externalURL[:4] != "http" {
 		err = fmt.Errorf("URL is missing protocol")
 		return
@@ -214,7 +217,7 @@ func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
 		case http.MethodPost:
 			if strings.Index(r.Header.Get("Content-Type"), "application/json") == 0 {
 				hlog.FromRequest(r).Debug().Msg("reading HTTP body")
-				b, err := ioutil.ReadAll(r.Body)
+				b, err := io.ReadAll(r.Body)
 				if err != nil {
 					serverError(w, r, fmt.Errorf("error while reading request body: %v", err))
 					return
