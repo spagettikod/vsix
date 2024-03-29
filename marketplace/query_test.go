@@ -60,8 +60,7 @@ func TestIsValid(t *testing.T) {
 }
 
 func TestFlag(t *testing.T) {
-	var f QueryFlag
-	f = 950
+	f := QueryFlag(950)
 	fmt.Printf("%v - FlagExcludeNonValidated: %v\n", f, f.Is(FlagExcludeNonValidated))
 	fmt.Printf("%v - FlagIncludeAssetURI: %v\n", f, f.Is(FlagIncludeAssetURI))
 	fmt.Printf("%v - FlagIncludeCatergoryAndTags: %v\n", f, f.Is(FlagIncludeCatergoryAndTags))

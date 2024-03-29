@@ -25,7 +25,7 @@ var searchCmd = &cobra.Command{
 	Short: "Query Marketplace for extensions.",
 	Long: `Search for extensions at Marketplace.
 
-Without any parameters it lists extensions at Marketplace sorted by install count.
+Without any parameters the command lists extensions at Marketplace sorted by install count.
 By default it limits the result to 20 items. Sort order and limits can be controlled
 by flags.`,
 	Example:               "  $ vsix search docker",

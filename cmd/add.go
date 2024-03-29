@@ -11,24 +11,28 @@ import (
 )
 
 func init() {
+	dbAddCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	dbAddCmd.Flags().IntVar(&threads, "threads", 10, "number of simultaneous download threads")
 	dbAddCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list to limit which target platforms to add")
 	dbAddCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions, these are skipped by default")
-	dbAddCmd.Flags().BoolVar(&force, "force", false, "download extension eventhough it already exists in database")
+	dbAddCmd.Flags().BoolVar(&force, "force", false, "download extension eventhough it already exists locally")
 	rootCmd.AddCommand(dbAddCmd)
 }
 
 var dbAddCmd = &cobra.Command{
 	Use:   "add <identifier...>",
-	Short: "Add extension(s) from Marketplace to the database",
-	Long: `Downloads the latest version of the given extension(s) from Marketplace to the database.
-Once added, use the sync command to keep the extension up to date with Marketplace.
+	Short: "Add extension(s) from Marketplace to local storage",
+	Long: `Add extension(s) from Marketplace to local storage
+
+Downloads the latest version of the given extension(s) from Marketplace to local storage.
+Once added, use the update command to keep the extension up to date with Marketplace. Use
+the serve-command to host your own Marketplace with the downloaded extensions.
 
 Multiple identifiers, separated by space, can be used to add multiple extensions at once.
 
 Target platforms
 ----------------
-By default all platform versions of an extension is added. You can limit which platforms
+By default all platform versions of an extension are added. You can limit which platforms
 to add by using the platforms-flag. This is a comma separated list of platforms. You can
 view available platforms for an extension by using the info-command. The
 universal-platform is always added, regardless of the platforms-flag.
@@ -41,7 +45,12 @@ finds the latest version not marked as pre-release. To enable adding an extensio
 selecting the latest version, regardless if marked as pre-release, use the
 pre-release-flag.
 `,
-	Example:               "  $ vsix db add redhat.java",
+	Example: `  Add Java extension
+    $ vsix add --data extensions redhat.java 
+
+  Add 100 most popular extensions
+    $ vsix add --data extensions $(vsix search --limit 100)
+`,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -49,7 +58,7 @@ pre-release-flag.
 		start := time.Now()
 		db, err := database.OpenFs(dbPath, false)
 		if err != nil {
-			log.Fatal().Err(err).Str("database_root", dbPath).Msg("could not open database")
+			log.Fatal().Err(err).Str("data_root", dbPath).Msg("could not open folder")
 		}
 
 		extensionsToAdd := []marketplace.ExtensionRequest{}

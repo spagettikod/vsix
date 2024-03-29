@@ -53,9 +53,8 @@ var (
 )
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "turn on debug logging [VSIX_LOG_DEBUG]")
-	rootCmd.PersistentFlags().BoolVar(&jsonLog, "json", false, "output verbose and debug logs as JSON [VSIX_LOG_JSON]")
+	rootCmd.PersistentFlags().BoolVar(&jsonLog, "json", false, "log output as JSON [VSIX_LOG_JSON]")
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "turn on verbose logging [VSIX_LOG_VERBOSE]")
 }
 

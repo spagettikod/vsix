@@ -143,7 +143,7 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) err
 		elog.Info().Msg("skipping download, version already exist at output path")
 		return nil
 	}
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 

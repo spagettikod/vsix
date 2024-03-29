@@ -16,19 +16,20 @@ import (
 )
 
 func init() {
+	updateCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	updateCmd.Flags().IntVar(&threads, "threads", 10, "number of simultaneous download threads")
-	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
+	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "update should fetch pre-release versions")
 	rootCmd.AddCommand(updateCmd)
 }
 
 var updateCmd = &cobra.Command{
 	Use:   "update",
-	Short: "Update extensions in the database with their latest version",
+	Short: "Update extensions in the local storage with their latest version",
 	Long: `Update will download the latest version of all the extensions currently in
-the database.
+the local storage.
 
-Only the latest version will be downloaded each time sync is run. If the extension
-has had multiple releases between each run of sync those versions will not be
+Only the latest version will be downloaded each time update is run. If the extension
+has had multiple releases between each run of update those versions will not be
 downloaded.
 
 The command will exit with exit code 78 if one of the extensions can not be found
@@ -37,21 +38,16 @@ output but the execution will not stop.
 
 Target platforms
 ----------------
-Only the target platforms that exist in the database are updated.
+Only the target platforms that exist in the local storage are updated.
 
 Pre-releases
 ------------
-By default sync skips extension versions marked as pre-release. If the latest version
+By default update skips extension versions marked as pre-release. If the latest version
 is marked as pre-release the command will traverse the list of versions until it
 finds the latest version not marked as pre-release. To enable downloading an extension
 and selecting the latest version, regardless if marked as pre-release, use the
 pre-release-flag.`,
-	Example: `  $ vsix update -d downloads
-	
-  $ docker run --rm \
-	-v downloads:/data \
-	-w /data \
-	spagettikod/vsix update`,
+	Example:               `  $ vsix update --data extensions `,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		if threads < 1 {
@@ -59,12 +55,12 @@ pre-release-flag.`,
 			os.Exit(1)
 		}
 		start := time.Now()
-		lg := log.With().Str("database_root", dbPath).Str("component", "update").Logger()
+		lg := log.With().Str("data_root", dbPath).Str("component", "update").Logger()
 		db, err := database.OpenFs(dbPath, false)
 		if err != nil {
-			lg.Fatal().Err(err).Msg("could not open database")
+			lg.Fatal().Err(err).Msg("could not open folder")
 		}
-		lg.Debug().Msgf("open database took %.3fs", time.Since(start).Seconds())
+		lg.Debug().Msgf("open local extensions took %.3fs", time.Since(start).Seconds())
 		exts := db.List(true)
 
 		ers := []marketplace.ExtensionRequest{}
@@ -82,10 +78,10 @@ pre-release-flag.`,
 		lg = lg.With().Int("downloads", fetchCount).Int("errors", errCount).Logger()
 		lg.Info().Msgf("total time for update %.3fs", time.Since(start).Seconds())
 		if fetchCount > 0 {
-			lg.Debug().Msg("notifying database")
+			lg.Debug().Msg("notifying server")
 			err = db.Modified()
 			if err != nil {
-				lg.Fatal().Err(err).Msg("could not notify database of extension update")
+				lg.Fatal().Err(err).Msg("could not notify server of extension update")
 			}
 		}
 		if errCount > 0 {
@@ -175,9 +171,6 @@ func fetchExtension(req marketplace.ExtensionRequest, db *database.DB, stack []s
 				Force:           req.Force,
 			}
 			packResult := fetchExtension(itemRequest, db, append(stack, itemUniqueID), compontent)
-			if err != nil {
-				return FetchResult{0, err}
-			}
 			result.Downloads += packResult.Downloads
 		}
 	}
