@@ -18,7 +18,7 @@ import (
 func init() {
 	updateCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	updateCmd.Flags().IntVar(&threads, "threads", 10, "number of simultaneous download threads")
-	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "sync should fetch pre-release versions")
+	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "update should fetch pre-release versions")
 	rootCmd.AddCommand(updateCmd)
 }
 
