@@ -14,7 +14,7 @@ setup:
 	@mkdir -p $(OUTPUT)
 
 build_docker:
-	@docker build -t spagettikod/vsix:v$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
+	@docker build -t spagettikod/vsix:$(VERSION) -t spagettikod/vsix:latest --build-arg VERSION=$(VERSION) .
 
 build_linux: setup
 	@env GOOS=linux GOARCH=amd64 go build -o $(OUTPUT) -ldflags "-X main.version=$(VERSION)" vsix.go
