@@ -1,6 +1,6 @@
 module github.com/spagettikod/vsix
 
-go 1.21.1
+go 1.23.5
 
 require (
 	github.com/fsnotify/fsnotify v1.7.0
