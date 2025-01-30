@@ -12,12 +12,11 @@ WORKDIR /vsix
 COPY ./ .
 RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=0 go build -ldflags="-extldflags=-static" -ldflags "-X main.version=$VERSION" vsix.go
 
-# FROM scratch AS package
-FROM debian:bookworm-slim AS package
+FROM scratch AS package
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /vsix/vsix /
 VOLUME [ "/data", "/server.crt", "/server.key" ]
 WORKDIR /data
-# ENV VSIX_DB_PATH=/data
+ENV VSIX_DB_PATH=/data
 ENTRYPOINT [ "/vsix" ]
-CMD [ "serve", "--data", "/data", "--cert", "/server.crt", "--key", "/server.key" ]
+CMD [ "serve", "--cert", "/server.crt", "--key", "/server.key" ]
