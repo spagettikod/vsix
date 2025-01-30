@@ -17,7 +17,7 @@ import (
 
 func init() {
 	updateCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
-	updateCmd.Flags().IntVar(&threads, "threads", 10, "number of simultaneous download threads")
+	updateCmd.Flags().IntVar(&threads, "threads", 3, "number of simultaneous download threads")
 	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "update should fetch pre-release versions")
 	rootCmd.AddCommand(updateCmd)
 }
@@ -65,13 +65,33 @@ pre-release-flag.`,
 
 		ers := []marketplace.ExtensionRequest{}
 		for _, ext := range exts {
-			er := marketplace.ExtensionRequest{
-				UniqueID:        ext.UniqueID(),
-				TargetPlatforms: ext.Platforms(),
-				PreRelease:      preRelease,
-				Force:           force,
+			vlog := lg.With().Str("unique_id", ext.UniqueID()).Logger()
+			// get latest version from Marketplace
+			marketplaceLatestVersion, err := marketplace.LatestVersion(ext.UniqueID(), preRelease)
+			if err != nil {
+				vlog.Err(err).Msg("error while fetching latest version from marketplace")
+				continue
 			}
-			ers = append(ers, er)
+			vlog = vlog.With().Str("unique_id", ext.UniqueID()).Str("local_version", ext.LatestVersion(preRelease)).Str("marketplace_version", marketplaceLatestVersion).Logger()
+
+			if marketplaceLatestVersion == "" {
+				vlog.Error().Msg("could not determine marketplace version, skipping this extension")
+				continue
+			}
+
+			if ext.LatestVersion(preRelease) == marketplaceLatestVersion {
+				vlog.Debug().Msg("skipping, already latest version")
+				continue
+			} else {
+				vlog.Debug().Msg("new version exist, adding to list of items to get")
+				er := marketplace.ExtensionRequest{
+					UniqueID:        ext.UniqueID(),
+					TargetPlatforms: ext.Platforms(),
+					PreRelease:      preRelease,
+					Force:           force,
+				}
+				ers = append(ers, er)
+			}
 		}
 		fetchCount, errCount := fetchThreaded(db, ers, threads, lg)
 

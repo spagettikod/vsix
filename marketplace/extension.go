@@ -1,11 +1,15 @@
 package marketplace
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path"
 	"slices"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
@@ -32,6 +36,30 @@ func Deduplicate(ers []ExtensionRequest) []ExtensionRequest {
 		}
 		return a.Equals(b)
 	})
+}
+
+func LatestVersion(uniqueID string, preRelease bool) (string, error) {
+	ext := vscode.Extension{}
+	s := strings.Split(uniqueID, ".")
+	if len(s) != 2 {
+		return "", fmt.Errorf("invalid unique ID %s", uniqueID)
+	}
+	resp, err := http.Get(fmt.Sprintf("https://www.vscode-unpkg.net/_gallery/%s/%s/latest", s[0], s[1]))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("check for latest extension version returned HTTP %v", resp.StatusCode)
+	}
+	bites, err := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		return "", err
+	}
+	if err := json.Unmarshal(bites, &ext); err != nil {
+		return "", err
+	}
+	return ext.LatestVersion(preRelease), nil
 }
 
 func FetchExtension(uniqueID string) (vscode.Extension, error) {
