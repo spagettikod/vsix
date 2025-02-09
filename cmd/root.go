@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -16,15 +17,18 @@ var (
 		Use:   "vsix",
 		Short: "Visual Studio Code Extension Marketplace command line interface tool.",
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			slog.SetLogLoggerLevel(slog.LevelWarn)
 			dbPath = EnvOrFlag("VSIX_DB_PATH", dbPath)
 			if !EnvOrFlagBool("VSIX_LOG_JSON", jsonLog) {
 				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
 			}
 			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 			if EnvOrFlagBool("VSIX_LOG_VERBOSE", verbose) {
+				slog.SetLogLoggerLevel(slog.LevelInfo)
 				zerolog.SetGlobalLevel(zerolog.InfoLevel)
 			}
 			if EnvOrFlagBool("VSIX_LOG_DEBUG", debug) {
+				slog.SetLogLoggerLevel(slog.LevelDebug)
 				zerolog.SetGlobalLevel(zerolog.DebugLevel)
 			}
 		},

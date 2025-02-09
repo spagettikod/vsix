@@ -16,6 +16,15 @@ var (
 	ErrVersionNotFound = errors.New("version was not found for this extension")
 )
 
+// ExtensionTag is a unique identifier for a combination of
+// extension/version/platform.
+type ExtensionTag struct {
+	UniqueID       UniqueID
+	Version        string
+	TargetPlatform string
+	PreRelease     bool
+}
+
 type Extension struct {
 	Publisher        Publisher   `json:"publisher"`
 	ID               string      `json:"extensionId"`
