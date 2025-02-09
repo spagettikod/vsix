@@ -61,38 +61,39 @@ pre-release-flag.`,
 			lg.Fatal().Err(err).Msg("could not open folder")
 		}
 		lg.Debug().Msgf("open local extensions took %.3fs", time.Since(start).Seconds())
-		exts := db.List(true)
+		// FIXME latest check is broken since new add
+		// exts := db.List(true)
 
 		ers := []marketplace.ExtensionRequest{}
-		for _, ext := range exts {
-			vlog := lg.With().Str("unique_id", ext.UniqueID()).Logger()
-			// get latest version from Marketplace
-			marketplaceLatestVersion, err := marketplace.LatestVersion(ext.UniqueID(), preRelease)
-			if err != nil {
-				vlog.Err(err).Msg("error while fetching latest version from marketplace")
-				continue
-			}
-			vlog = vlog.With().Str("unique_id", ext.UniqueID()).Str("local_version", ext.LatestVersion(preRelease)).Str("marketplace_version", marketplaceLatestVersion).Logger()
+		// for _, ext := range exts {
+		// vlog := lg.With().Str("unique_id", ext.UniqueID()).Logger()
+		// get latest version from Marketplace
+		// marketplaceLatestVersion, err := marketplace.LatestVersion(ext.UniqueID(), preRelease)
+		// if err != nil {
+		// 	vlog.Err(err).Msg("error while fetching latest version from marketplace")
+		// 	continue
+		// }
+		// vlog = vlog.With().Str("unique_id", ext.UniqueID()).Str("local_version", ext.LatestVersion(preRelease)).Str("marketplace_version", marketplaceLatestVersion).Logger()
 
-			if marketplaceLatestVersion == "" {
-				vlog.Error().Msg("could not determine marketplace version, skipping this extension")
-				continue
-			}
+		// if marketplaceLatestVersion == "" {
+		// 	vlog.Error().Msg("could not determine marketplace version, skipping this extension")
+		// 	continue
+		// }
 
-			if ext.LatestVersion(preRelease) == marketplaceLatestVersion {
-				vlog.Debug().Msg("skipping, already latest version")
-				continue
-			} else {
-				vlog.Debug().Msg("new version exist, adding to list of items to get")
-				er := marketplace.ExtensionRequest{
-					UniqueID:        ext.UniqueID(),
-					TargetPlatforms: ext.Platforms(),
-					PreRelease:      preRelease,
-					Force:           force,
-				}
-				ers = append(ers, er)
-			}
-		}
+		// if ext.LatestVersion(preRelease) == marketplaceLatestVersion {
+		// 	vlog.Debug().Msg("skipping, already latest version")
+		// 	continue
+		// } else {
+		// 	vlog.Debug().Msg("new version exist, adding to list of items to get")
+		// 	er := marketplace.ExtensionRequest{
+		// 		UniqueID:        ext.UniqueID(),
+		// 		TargetPlatforms: ext.Platforms(),
+		// 		PreRelease:      preRelease,
+		// 		Force:           force,
+		// 	}
+		// 	ers = append(ers, er)
+		// }
+		// }
 		fetchCount, errCount := fetchThreaded(db, ers, threads, lg)
 
 		lg = lg.With().Int("downloads", fetchCount).Int("errors", errCount).Logger()
@@ -121,7 +122,7 @@ func fetchThreaded(db *database.DB, extensions []marketplace.ExtensionRequest, t
 	errCount := 0
 	fetchCount := 0
 	for _, ext := range extensions {
-		lg := lg.With().Str("extension_id", ext.UniqueID).Logger()
+		lg := lg.With().Str("extension_id", ext.UniqueID.String()).Logger()
 		if running >= maxRunning {
 			lg.Debug().Msg("maximum thread count reached, waiting")
 			result := <-ch
@@ -151,7 +152,7 @@ func fetchThreaded(db *database.DB, extensions []marketplace.ExtensionRequest, t
 }
 
 func doFetch(ch chan FetchResult, db *database.DB, er marketplace.ExtensionRequest, lg zerolog.Logger) {
-	result := fetchExtension(er, db, []string{er.UniqueID}, "fetch_thread")
+	result := fetchExtension(er, db, []string{er.UniqueID.String()}, "fetch_thread")
 	if result.Err != nil {
 		lg.Err(result.Err).Msg("error occured while fetching extension")
 	}
@@ -169,7 +170,7 @@ type FetchResult struct {
 // it returns false if the extension version already exists and no download occured. Otherwise it returns true.
 func fetchExtension(req marketplace.ExtensionRequest, db *database.DB, stack []string, compontent string) FetchResult {
 	result := FetchResult{0, nil}
-	elog := log.With().Str("unique_id", req.UniqueID).Str("component", compontent).Logger()
+	elog := log.With().Str("unique_id", req.UniqueID.String()).Str("component", compontent).Logger()
 	start := time.Now()
 
 	extension, err := req.Download(preRelease)
@@ -184,8 +185,9 @@ func fetchExtension(req marketplace.ExtensionRequest, db *database.DB, stack []s
 				elog.Warn().Msg("circular extension pack reference, skipping to avoid infinite loop")
 				continue
 			}
+			uid, _ := vscode.Parse(itemUniqueID)
 			itemRequest := marketplace.ExtensionRequest{
-				UniqueID:        itemUniqueID,
+				UniqueID:        uid,
 				TargetPlatforms: req.TargetPlatforms,
 				PreRelease:      preRelease,
 				Force:           req.Force,

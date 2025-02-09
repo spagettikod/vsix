@@ -9,14 +9,13 @@ import (
 	"os"
 	"path"
 	"slices"
-	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 )
 
 type ExtensionRequest struct {
-	UniqueID        string
+	UniqueID        vscode.UniqueID
 	Version         string
 	TargetPlatforms []string
 	PreRelease      bool
@@ -31,35 +30,31 @@ var (
 
 func Deduplicate(ers []ExtensionRequest) []ExtensionRequest {
 	return slices.CompactFunc(ers, func(a, b ExtensionRequest) bool {
-		if a.UniqueID == "" || b.UniqueID == "" {
+		if a.UniqueID.IsZero() || b.UniqueID.IsZero() {
 			return true
 		}
 		return a.Equals(b)
 	})
 }
 
-func LatestVersion(uniqueID string, preRelease bool) (string, error) {
+func LatestVersion(uid vscode.UniqueID, preRelease bool) (vscode.Extension, error) {
 	ext := vscode.Extension{}
-	s := strings.Split(uniqueID, ".")
-	if len(s) != 2 {
-		return "", fmt.Errorf("invalid unique ID %s", uniqueID)
-	}
-	resp, err := http.Get(fmt.Sprintf("https://www.vscode-unpkg.net/_gallery/%s/%s/latest", s[0], s[1]))
+	resp, err := http.Get(fmt.Sprintf("https://www.vscode-unpkg.net/_gallery/%s/%s/latest", uid.Publisher, uid.Name))
 	if err != nil {
-		return "", err
+		return ext, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("check for latest extension version returned HTTP %v", resp.StatusCode)
+		return ext, fmt.Errorf("check for latest extension version returned HTTP %v", resp.StatusCode)
 	}
 	bites, err := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 	if err != nil {
-		return "", err
+		return ext, err
 	}
 	if err := json.Unmarshal(bites, &ext); err != nil {
-		return "", err
+		return ext, err
 	}
-	return ext.LatestVersion(preRelease), nil
+	return ext, nil
 }
 
 func FetchExtension(uniqueID string) (vscode.Extension, error) {
@@ -85,7 +80,7 @@ func (er ExtensionRequest) HasTargetPlatform(tp string) bool {
 }
 
 func (er ExtensionRequest) Equals(er2 ExtensionRequest) bool {
-	if er.UniqueID == er2.UniqueID && er.Version == er2.Version && er.PreRelease == er2.PreRelease {
+	if er.UniqueID.Equals(er2.UniqueID) && er.Version == er2.Version && er.PreRelease == er2.PreRelease {
 		for _, tp := range er2.TargetPlatforms {
 			if !er.HasTargetPlatform(tp) {
 				return false
@@ -117,7 +112,7 @@ func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
 
 func (pe ExtensionRequest) String() string {
 	if pe.Version == "" {
-		return pe.UniqueID
+		return pe.UniqueID.String()
 	}
 	return fmt.Sprintf("%s-%s", pe.UniqueID, pe.Version)
 }
@@ -125,7 +120,7 @@ func (pe ExtensionRequest) String() string {
 // rewrite this, half the code is the same as Download, recursive function complicates things,
 // maybe rethink the entire setup?
 func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) error {
-	elog := log.With().Str("extension", pe.UniqueID).Str("dir", root).Logger()
+	elog := log.With().Str("extension", pe.UniqueID.String()).Str("dir", root).Logger()
 
 	elog.Debug().Msg("only VSIXPackage will be fetched")
 	elog.Debug().Msg("checking if output directory exists")
@@ -134,14 +129,15 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) err
 	}
 
 	elog.Info().Msg("searching for extension at Marketplace")
-	ext, err := FetchExtension(pe.UniqueID)
+	ext, err := FetchExtension(pe.UniqueID.String())
 	if err != nil {
 		return err
 	}
 	if ext.IsExtensionPack() {
 		elog.Info().Msg("is extension pack, getting pack contents")
 		for _, pack := range ext.ExtensionPack() {
-			erPack := ExtensionRequest{UniqueID: pack}
+			puid, _ := vscode.Parse(pack)
+			erPack := ExtensionRequest{UniqueID: puid}
 			err := erPack.DownloadVSIXPackage(root, preRelease)
 			if err != nil {
 				return err
@@ -193,10 +189,10 @@ func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) err
 // Download fetches metadata for the requested extension and returns it
 // as an Extension struct.
 func (extReq ExtensionRequest) Download(preRelease bool) (vscode.Extension, error) {
-	elog := log.With().Str("extension", extReq.UniqueID).Str("extension_version", extReq.Version).Logger()
+	elog := log.With().Str("extension", extReq.UniqueID.String()).Str("extension_version", extReq.Version).Logger()
 
 	elog.Debug().Msg("searching for extension at Marketplace")
-	ext, err := FetchExtension(extReq.UniqueID)
+	ext, err := FetchExtension(extReq.UniqueID.String())
 	if err != nil {
 		return vscode.Extension{}, err
 	}
