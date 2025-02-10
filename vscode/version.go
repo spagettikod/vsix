@@ -102,6 +102,6 @@ func (v Version) Validate() (bool, error) {
 	return true, nil
 }
 
-func (v Version) Tag(uid UniqueID) ExtensionTag {
-	return ExtensionTag{UniqueID: uid, Version: v.Version, PreRelease: v.IsPreRelease(), TargetPlatform: v.TargetPlatform()}
+func (v Version) Tag(uid UniqueID) VersionTag {
+	return VersionTag{UniqueID: uid, Version: v.Version, PreRelease: v.IsPreRelease(), TargetPlatform: v.TargetPlatform()}
 }

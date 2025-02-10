@@ -5,10 +5,10 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"slices"
 	"strconv"
 	"time"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
@@ -98,72 +98,82 @@ pre-release-flag.
 
 		slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
 
-		total := 0
 		skipped := 0
 		failures := 0
 		matched := 0
 		assets := 0
+		bar := progressbar.NewOptions(len(extensionsToAdd), progressbar.OptionShowCount(), progressbar.OptionSetVisibility(!(verbose || debug)))
 		for _, er := range extensionsToAdd {
-			ext, err := marketplace.LatestVersion(er.UniqueID, er.PreRelease)
+			extStart := time.Now()
+			bar.Describe(er.UniqueID.String())
+			res, err := FetchAndSaveMetadata(db, er)
 			if err != nil {
-				slog.Error("error while fetching latest version", "uniqueId", er.UniqueID)
-				return
+				slog.Error("error fetching extension metadata", "error", err, "uniqueId", er.UniqueID)
+				bar.Add(1)
+				failures++
+				continue
 			}
-			total = total + len(ext.Versions)
-			latestVersionNumber := ext.LatestVersion(preRelease)
-			for _, v := range ext.Versions {
-				extGrp := slog.Group("extension", "uniqueId", ext.UniqueID(), "version", v.Version, "targetPlatform", v.TargetPlatform(), "preRelease", v.IsPreRelease())
-				if v.Version != latestVersionNumber {
-					slog.Debug("skipping version", extGrp, argGrp)
-					skipped++
-					continue
-				}
-				if targetPlatformMatches(er.TargetPlatforms, v) { // if universal was given in command and the target platform is not included in the version json
-					if v.IsPreRelease() && !er.PreRelease {
-						slog.Debug("skipping version", extGrp, argGrp)
-						skipped++
+			skipped += res.VersionsSkipped
+			matched += len(res.Versions)
+			extAsset := 0
+			for _, v := range res.Versions {
+				for _, a := range v.Files {
+					bar.Describe(er.UniqueID.String() + fmt.Sprintf(": asset %v of %v", extAsset, res.TotalAssets))
+					aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
+					slog.Debug("saving asset", aGrp, argGrp)
+					size, err := FetchAndSaveAsset(db, v.Tag(er.UniqueID), a)
+					if err != nil {
+						slog.Error("error saving asset, continuing with next asset", "error", err, aGrp, argGrp)
 						continue
 					}
-					slog.Debug("version matched", extGrp, argGrp)
-					if err := db.SaveExtensionMetadata(ext); err != nil {
-						slog.Error("error saving extension metadata, continuing with next extension", "error", err, extGrp, argGrp)
-						failures++
-						continue
-					}
-					if err := db.SaveVersionMetadata(er.UniqueID, v); err != nil {
-						slog.Error("error saving version metadata, continuing with next extension", "error", err, extGrp, argGrp)
-						failures++
-						continue
-					}
-					for _, a := range v.Files {
-						aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
-						slog.Debug("saving asset", aGrp, extGrp, argGrp)
-						size, err := FetchAndSaveAsset(db, v.Tag(er.UniqueID), a)
-						if err != nil {
-							slog.Error("error saving asset, continuing with next asset", "error", err, aGrp, extGrp, argGrp)
-							failures++
-							continue
-						}
-						slog.Debug("asset downloaded", "contentLength", size)
-						assets++
-					}
-					matched++
-				} else {
-					slog.Debug("skipping version", extGrp, argGrp)
-					skipped++
+					slog.Debug("asset downloaded", "contentLength", size)
+					assets++
+					extAsset++
 				}
 			}
-			if matched == 0 {
-				slog.Warn("no extension versions found matching given parameters", slog.Group("extension", "uniqueId", ext.UniqueID()), argGrp)
-			}
-			slog.Info("extension processed", slog.Group("extension", "uniqueId", ext.UniqueID()), "elapsedTime", time.Since(start).Round(time.Millisecond), argGrp)
+
+			slog.Info("extension processed", slog.Group("extension", "uniqueId", er.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
+			bar.Add(1)
 		}
 		statusGrp := slog.Group("versions", "matched", matched, "failed", failures, "skipped", skipped, "downloadedAssets", assets)
-		slog.Info("finished add", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
+		slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
+		fmt.Println("")
 	},
 }
 
-func FetchAndSaveAsset(db *storage.Database, tag vscode.ExtensionTag, asset vscode.Asset) (int64, error) {
+type RequestResult struct {
+	VersionsSkipped int
+	TotalAssets     int
+	Versions        []vscode.Version
+}
+
+func FetchAndSaveMetadata(db *storage.Database, request marketplace.ExtensionRequest) (RequestResult, error) {
+	res := RequestResult{}
+
+	// fetch metadata for latest version
+	ext, err := marketplace.LatestVersion(request.UniqueID, request.PreRelease)
+	if err != nil {
+		return res, err
+	}
+
+	if err := db.SaveExtensionMetadata(ext); err != nil {
+		return res, fmt.Errorf("error saving extension metadata: %w", err)
+	}
+	for _, v := range ext.Versions {
+		if request.Matches(v.Tag(request.UniqueID)) && v.Version == ext.LatestVersion(request.PreRelease) {
+			if err := db.SaveVersionMetadata(request.UniqueID, v); err != nil {
+				return res, fmt.Errorf("error saving version metadata: %w", err)
+			}
+			res.TotalAssets += len(v.Files)
+			res.Versions = append(res.Versions, v)
+		} else {
+			res.VersionsSkipped++
+		}
+	}
+	return res, nil
+}
+
+func FetchAndSaveAsset(db *storage.Database, tag vscode.VersionTag, asset vscode.Asset) (int64, error) {
 	resp, err := http.Get(asset.Source)
 	if err != nil {
 		return 0, err
@@ -175,10 +185,4 @@ func FetchAndSaveAsset(db *storage.Database, tag vscode.ExtensionTag, asset vsco
 	slen := resp.Header.Get("Content-length")
 	ilen, _ := strconv.ParseInt(slen, 10, 64)
 	return ilen, db.SaveAsset(tag, asset.Type, resp.Body)
-}
-
-func targetPlatformMatches(requested []string, version vscode.Version) bool {
-	return len(requested) == 0 || // no target platform given, matches all platforms
-		slices.Contains(requested, version.RawTargetPlatform) || // is the specific platform given in the command, universal will not be matched as it is not included in the version json (see next condition)
-		(slices.Contains(requested, "universal") && version.RawTargetPlatform == "") // if universal was given in command and the target platform is not included in the version json
 }

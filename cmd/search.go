@@ -63,7 +63,7 @@ by flags.`,
 				continue
 			}
 			extData := []string{}
-			extData = append(extData, ext.UniqueID())
+			extData = append(extData, ext.UniqueID().String())
 			if len(ext.DisplayName) > 30 {
 				extData = append(extData, ext.DisplayName[:27]+"...")
 			} else {

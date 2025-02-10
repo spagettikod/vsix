@@ -225,3 +225,12 @@ func outDirExists(path string) (bool, error) {
 	}
 	return true, nil
 }
+
+func (er ExtensionRequest) Matches(tag vscode.VersionTag) bool {
+	// skip if the version is a pre-release and the request doesn't want those
+	if tag.PreRelease && !er.PreRelease {
+		return false
+	}
+	return len(er.TargetPlatforms) == 0 || // no target platform given, matches all platforms
+		slices.Contains(er.TargetPlatforms, tag.TargetPlatform) // is the specific platform given in the command, universal will not be matched as it is not included in the version json (see next condition)
+}

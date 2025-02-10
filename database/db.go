@@ -181,7 +181,7 @@ func (db *DB) Modified() error {
 func (db *DB) saveExtensionMetadata(e vscode.Extension) error {
 	// save extension metadata
 	// re-run query to populate statistics, list versions query does not populate statistics, is there another way?
-	eqr, err := marketplace.QueryLatestVersionByUniqueID(e.UniqueID()).Run()
+	eqr, err := marketplace.QueryLatestVersionByUniqueID(e.UniqueID().String()).Run()
 	if err != nil {
 		return err
 	}
@@ -205,20 +205,20 @@ func (db *DB) saveVersionMetadata(e vscode.Extension, v vscode.Version) error {
 
 // rollback removes the entire version directory, called when sync fails
 func (db *DB) Rollback(e vscode.Extension, v vscode.Version) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
+	elog := db.dblog.With().Str("extension", e.UniqueID().String()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Logger()
 	versionDir := VersionDir(db.root, e, v)
 	elog.Warn().Str("version_dir", versionDir).Msg("removing version directory due to rollback")
 	return db.fs.RemoveAll(versionDir)
 }
 
 func (db *DB) SaveExtensionMetadata(e vscode.Extension) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Logger()
+	elog := db.dblog.With().Str("extension", e.UniqueID().String()).Logger()
 	elog.Debug().Msg("saving extension metadata file")
 	return db.saveExtensionMetadata(e)
 }
 
 func (db *DB) SaveVersionMetadata(e vscode.Extension, v vscode.Version) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("target_platform", v.RawTargetPlatform).Logger()
+	elog := db.dblog.With().Str("extension", e.UniqueID().String()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("target_platform", v.RawTargetPlatform).Logger()
 
 	elog.Debug().Msg("saving version metadata file")
 	if err := db.saveVersionMetadata(e, v); err != nil {
@@ -234,7 +234,7 @@ func (db *DB) SaveVersionMetadata(e vscode.Extension, v vscode.Version) error {
 }
 
 func (db *DB) SaveAssetFile(e vscode.Extension, v vscode.Version, a vscode.Asset, b []byte) error {
-	elog := db.dblog.With().Str("extension", e.UniqueID()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("target_platform", v.RawTargetPlatform).Logger()
+	elog := db.dblog.With().Str("extension", e.UniqueID().String()).Str("extension_version", v.Version).Str("extension_version_id", v.ID()).Str("target_platform", v.RawTargetPlatform).Logger()
 	filename := AssetFile(db.root, e, v, a)
 	elog.Debug().Str("source", a.Source).Str("destination", filename).Msg("writing to file")
 	f, err := db.fs.Create(filename)
@@ -296,7 +296,7 @@ func (db *DB) GetVersion(uniqueID string, version vscode.Version) (vscode.Versio
 func (db *DB) GetByUniqueID(keepLatestVersion bool, uniqueID string) (vscode.Extension, bool) {
 	normalizedUniqueID := strings.ToLower(uniqueID)
 	for _, i := range db.items {
-		if strings.ToLower(i.UniqueID()) == normalizedUniqueID {
+		if strings.ToLower(i.UniqueID().String()) == normalizedUniqueID {
 			if keepLatestVersion {
 				i = i.KeepVersions(i.LatestVersion(true))
 			}
@@ -318,7 +318,7 @@ func (db *DB) SearchByUniqueID(keepLatestVersion bool, uniqueIDs ...string) []vs
 
 	result := []vscode.Extension{}
 	for _, i := range db.items {
-		if queryMap[strings.ToLower(i.UniqueID())] {
+		if queryMap[strings.ToLower(i.UniqueID().String())] {
 			if keepLatestVersion {
 				i = i.KeepVersions(i.LatestVersion(true))
 			}
@@ -626,6 +626,6 @@ func (db *DB) versionAssets(versionRoot string) []vscode.Asset {
 }
 
 func (db *DB) DeleteVersion(e vscode.Extension, v vscode.Version) error {
-	db.dblog.Info().Str("extension", e.UniqueID()).Str("version", v.Version).Msg("removing version")
+	db.dblog.Info().Str("extension", e.UniqueID().String()).Str("version", v.Version).Msg("removing version")
 	return os.RemoveAll(path.Dir(v.Path))
 }

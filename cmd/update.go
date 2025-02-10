@@ -211,7 +211,7 @@ func fetchExtension(req marketplace.ExtensionRequest, db *database.DB, stack []s
 			vlog.Debug().Msg("skipping, unwanted target platform")
 			continue
 		}
-		if existingVersion, found := db.GetVersion(extension.UniqueID(), version); found {
+		if existingVersion, found := db.GetVersion(extension.UniqueID().String(), version); found {
 			// if the new version is no longer in pre-release state we're replacing
 			// it with the new one
 			if !(existingVersion.IsPreRelease() && !version.IsPreRelease()) && !force {

@@ -99,19 +99,19 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 				// assume all platform version of a top level version are release
 				// approximately at the same time so we disregard the release date
 				if ext.IsMultiPlatform(true) {
-					logger.Debug().Str("extension", ext.UniqueID()).Msg("multi platform extension, cleaning away platform versions and keeping top level version")
+					logger.Debug().Str("extension", ext.UniqueID().String()).Msg("multi platform extension, cleaning away platform versions and keeping top level version")
 					vermap := map[string]vscode.Version{}
 					for _, v := range versions {
 						vermap[v.Version] = v
 					}
 					versions = nil
 					for _, v := range vermap {
-						logger.Debug().Str("extension", ext.UniqueID()).Str("version", v.Version).Msg("keeping top level version")
+						logger.Debug().Str("extension", ext.UniqueID().String()).Str("version", v.Version).Msg("keeping top level version")
 						versions = append(versions, v)
 					}
 				}
 				if len(versions) <= keep {
-					logger.Info().Str("extension", ext.UniqueID()).Msgf("skipping prune, too few versions")
+					logger.Info().Str("extension", ext.UniqueID().String()).Msgf("skipping prune, too few versions")
 					continue
 				}
 				// sort by updated date, latest first
@@ -119,11 +119,11 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 					return versions[i].LastUpdated.After(versions[j].LastUpdated)
 				})
 				for _, v := range versions[:keep] {
-					logger.Info().Str("extension", ext.UniqueID()).Str("version", v.Version).Msg("keeping version")
+					logger.Info().Str("extension", ext.UniqueID().String()).Str("version", v.Version).Msg("keeping version")
 				}
 				for _, v := range versions[keep:] {
 					if dry {
-						logger.Info().Str("extension", ext.UniqueID()).Str("version", v.Version).Msg("would be removed without dry run")
+						logger.Info().Str("extension", ext.UniqueID().String()).Str("version", v.Version).Msg("would be removed without dry run")
 					} else {
 						err := db.DeleteVersion(ext, v)
 						if err != nil {

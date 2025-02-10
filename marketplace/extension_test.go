@@ -64,3 +64,54 @@ func TestDeduplicate(t *testing.T) {
 		t.Errorf("result %v, doesn't match expected results", result)
 	}
 }
+
+func TestMatches(t *testing.T) {
+	type TestCase struct {
+		Request  ExtensionRequest
+		Tag      vscode.VersionTag
+		Expected bool
+	}
+	tests := []TestCase{
+		{
+			// 0
+			Request:  ExtensionRequest{TargetPlatforms: []string{"darwin"}, PreRelease: false},
+			Tag:      vscode.VersionTag{TargetPlatform: "darwin", PreRelease: false},
+			Expected: true,
+		},
+		{
+			// 1 true since pre-release also matches actual release
+			Request:  ExtensionRequest{TargetPlatforms: []string{"darwin"}, PreRelease: true},
+			Tag:      vscode.VersionTag{TargetPlatform: "darwin", PreRelease: false},
+			Expected: true,
+		},
+		{
+			// 2
+			Request:  ExtensionRequest{TargetPlatforms: []string{"darwin", "win"}, PreRelease: false},
+			Tag:      vscode.VersionTag{TargetPlatform: "darwin", PreRelease: false},
+			Expected: true,
+		},
+		{
+			// 3
+			Request:  ExtensionRequest{TargetPlatforms: []string{"linux", "win"}, PreRelease: false},
+			Tag:      vscode.VersionTag{TargetPlatform: "darwin", PreRelease: false},
+			Expected: false,
+		},
+		{
+			// 4
+			Request:  ExtensionRequest{TargetPlatforms: []string{"linux", "win"}, PreRelease: true},
+			Tag:      vscode.VersionTag{TargetPlatform: "darwin", PreRelease: false},
+			Expected: false,
+		},
+		{
+			// 5
+			Request:  ExtensionRequest{TargetPlatforms: []string{"linux", "win"}, PreRelease: true},
+			Tag:      vscode.VersionTag{TargetPlatform: "linux", PreRelease: true},
+			Expected: true,
+		},
+	}
+	for i, test := range tests {
+		if test.Request.Matches(test.Tag) != test.Expected {
+			t.Fatalf("test case #%v failed", i)
+		}
+	}
+}

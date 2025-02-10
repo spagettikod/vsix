@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"fmt"
 	"io"
 	"log/slog"
 	"os"
@@ -127,21 +126,21 @@ func (db Database) extensionPath(uid vscode.UniqueID) string {
 }
 
 // assetPath returns the asset path for a given ExtensionTag
-func (db Database) assetPath(tag vscode.ExtensionTag) string {
+func (db Database) assetPath(tag vscode.VersionTag) string {
 	return filepath.Join(db.extensionPath(tag.UniqueID), tag.Version, tag.TargetPlatform)
 }
 
 func (db Database) SaveExtensionMetadata(ext vscode.Extension) error {
-	uid, ok := vscode.Parse(ext.UniqueID())
-	if !ok {
-		return fmt.Errorf("extension unique id %s is not valid", ext.ID)
-	}
+	// uid, ok := vscode.Parse(ext.UniqueID())
+	// if !ok {
+	// 	return fmt.Errorf("extension unique id %s is not valid", ext.ID)
+	// }
 	// clear version information, this is saved per version later on
 	ext.Versions = []vscode.Version{}
-	if err := db.fs.MkdirAll(db.extensionPath(uid), 0755); err != nil {
+	if err := db.fs.MkdirAll(db.extensionPath(ext.UniqueID()), 0755); err != nil {
 		return err
 	}
-	fpath := filepath.Join(db.extensionPath(uid), extensionMetadataFilename)
+	fpath := filepath.Join(db.extensionPath(ext.UniqueID()), extensionMetadataFilename)
 	return afero.WriteFile(db.fs, fpath, []byte(ext.String()), os.ModePerm)
 }
 
@@ -154,7 +153,7 @@ func (db Database) SaveVersionMetadata(uid vscode.UniqueID, v vscode.Version) er
 	return afero.WriteFile(db.fs, fpath, []byte(v.String()), os.ModePerm)
 }
 
-func (db Database) SaveAsset(tag vscode.ExtensionTag, atype vscode.AssetTypeKey, r io.ReadCloser) error {
+func (db Database) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, r io.ReadCloser) error {
 	p := db.assetPath(tag)
 	if err := db.fs.MkdirAll(p, 0755); err != nil {
 		return err

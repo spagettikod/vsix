@@ -3,6 +3,7 @@ package vscode
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -15,15 +16,6 @@ const (
 var (
 	ErrVersionNotFound = errors.New("version was not found for this extension")
 )
-
-// ExtensionTag is a unique identifier for a combination of
-// extension/version/platform.
-type ExtensionTag struct {
-	UniqueID       UniqueID
-	Version        string
-	TargetPlatform string
-	PreRelease     bool
-}
 
 type Extension struct {
 	Publisher        Publisher   `json:"publisher"`
@@ -137,8 +129,12 @@ func (e Extension) Statistic(name string) float32 {
 	return 0
 }
 
-func (e Extension) UniqueID() string {
-	return e.Publisher.Name + "." + e.Name
+func (e Extension) UniqueID() UniqueID {
+	uid, ok := Parse(e.Publisher.Name + "." + e.Name)
+	if !ok {
+		panic(fmt.Sprintf("could not parse unique id %s %s", e.Publisher.Name, e.Name))
+	}
+	return uid
 }
 
 func (e Extension) InstallCount() int {

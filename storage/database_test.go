@@ -16,7 +16,7 @@ func TestExtensionPath(t *testing.T) {
 	if !ok {
 		t.Fatal("unexpected error parsing unique id")
 	}
-	tag := vscode.ExtensionTag{UniqueID: id}
+	tag := vscode.VersionTag{UniqueID: id}
 	actual := db.extensionPath(tag.UniqueID)
 	if actual != expected {
 		t.Fatalf("expected %s but got %s", expected, actual)
@@ -33,7 +33,7 @@ func TestAssetPath(t *testing.T) {
 	if !ok {
 		t.Fatal("unexpected error parsing unique id")
 	}
-	tag := vscode.ExtensionTag{UniqueID: id, Version: "1.2.3", TargetPlatform: "darwin-arm64"}
+	tag := vscode.VersionTag{UniqueID: id, Version: "1.2.3", TargetPlatform: "darwin-arm64"}
 	actual := db.assetPath(tag)
 	if actual != expected {
 		t.Fatalf("expected %s but got %s", expected, actual)
