@@ -72,7 +72,7 @@ pre-release-flag.
 		start := time.Now()
 		argGrp := slog.Group("args", "cmd", "add", "path", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
-		db, err := storage.OpenFs(dbPath, false)
+		db, err := storage.OpenFs(dbPath)
 		if err != nil {
 			slog.Error("could not open database, exiting", "error", err, argGrp)
 			os.Exit(1)
@@ -99,18 +99,23 @@ pre-release-flag.
 		slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
 
 		skipped := 0
-		failures := 0
 		matched := 0
 		assets := 0
-		bar := progressbar.NewOptions(len(extensionsToAdd), progressbar.OptionShowCount(), progressbar.OptionSetVisibility(!(verbose || debug)))
+		bar := progressbar.NewOptions(len(extensionsToAdd),
+			progressbar.OptionShowCount(),
+			progressbar.OptionEnableColorCodes(true),
+			progressbar.OptionSetVisibility(!(verbose || debug)),
+			progressbar.OptionShowDescriptionAtLineEnd(),
+			progressbar.OptionSetPredictTime(false),
+			progressbar.OptionSetElapsedTime(true),
+		)
 		for _, er := range extensionsToAdd {
 			extStart := time.Now()
-			bar.Describe(er.UniqueID.String())
+			bar.Describe(er.UniqueID.String() + ": downloading metadata")
 			res, err := FetchAndSaveMetadata(db, er)
 			if err != nil {
 				slog.Error("error fetching extension metadata", "error", err, "uniqueId", er.UniqueID)
 				bar.Add(1)
-				failures++
 				continue
 			}
 			skipped += res.VersionsSkipped
@@ -118,7 +123,7 @@ pre-release-flag.
 			extAsset := 0
 			for _, v := range res.Versions {
 				for _, a := range v.Files {
-					bar.Describe(er.UniqueID.String() + fmt.Sprintf(": asset %v of %v", extAsset, res.TotalAssets))
+					bar.Describe(er.UniqueID.String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
 					aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
 					slog.Debug("saving asset", aGrp, argGrp)
 					size, err := FetchAndSaveAsset(db, v.Tag(er.UniqueID), a)
@@ -131,11 +136,10 @@ pre-release-flag.
 					extAsset++
 				}
 			}
-
 			slog.Info("extension processed", slog.Group("extension", "uniqueId", er.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
 			bar.Add(1)
 		}
-		statusGrp := slog.Group("versions", "matched", matched, "failed", failures, "skipped", skipped, "downloadedAssets", assets)
+		statusGrp := slog.Group("versions", "found", matched+skipped, "matched", matched, "skipped", skipped, "downloadedAssets", assets)
 		slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
 		fmt.Println("")
 	},
@@ -160,6 +164,15 @@ func FetchAndSaveMetadata(db *storage.Database, request marketplace.ExtensionReq
 		return res, fmt.Errorf("error saving extension metadata: %w", err)
 	}
 	for _, v := range ext.Versions {
+		// skip if this version exists
+		tag := v.Tag(request.UniqueID)
+		tag.PreRelease = request.PreRelease
+		_, exists := db.FindByVersionTag(tag)
+		if exists {
+			res.VersionsSkipped++
+			continue
+		}
+		// save version metadata and add it to the list of versions to download if it matches the request
 		if request.Matches(v.Tag(request.UniqueID)) && v.Version == ext.LatestVersion(request.PreRelease) {
 			if err := db.SaveVersionMetadata(request.UniqueID, v); err != nil {
 				return res, fmt.Errorf("error saving version metadata: %w", err)

@@ -224,3 +224,12 @@ func (e Extension) Platforms() []string {
 
 	return slices.Compact(platforms)
 }
+
+func (e Extension) VersionByTag(tag VersionTag) (Version, bool) {
+	for _, v := range e.Versions {
+		if tag == v.Tag(tag.UniqueID) {
+			return v, true
+		}
+	}
+	return Version{}, false
+}
