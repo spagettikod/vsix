@@ -1,23 +1,33 @@
 package storage
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/afero"
+	"golang.org/x/mod/semver"
 )
 
 const (
 	modFilename               string = ".modfile"
 	extensionMetadataFilename        = "_vsix_db_extension_metadata.json"
 	versionMetadataFilename          = "_vsix_db_version_metadata.json"
+)
+
+var (
+	ErrExtensionMetadataNotFound = errors.New("metadata file for the given extension was not found")
+	ErrMissingAsset              = errors.New("version asset in metadata file was not found in the database")
 )
 
 type Database struct {
@@ -33,11 +43,11 @@ type Database struct {
 }
 
 func OpenMem() (*Database, error) {
-	return open(afero.NewMemMapFs(), "/data", false)
+	return open(afero.NewMemMapFs(), "")
 }
 
-func OpenFs(root string, autoreload bool) (*Database, error) {
-	return open(afero.NewOsFs(), root, autoreload)
+func OpenFs(root string) (*Database, error) {
+	return open(afero.NewBasePathFs(afero.NewOsFs(), root), root)
 }
 
 func new(root string, fs afero.Fs) (*Database, error) {
@@ -55,86 +65,56 @@ func new(root string, fs afero.Fs) (*Database, error) {
 	}, nil
 }
 
-func open(fs afero.Fs, root string, autoreload bool) (*Database, error) {
+func open(fs afero.Fs, root string) (*Database, error) {
 	db, err := new(root, fs)
 	if err != nil {
 		return nil, err
 	}
-	if err := db.load(); err != nil {
+	if err := db.index(); err != nil {
 		return nil, err
 	}
-
-	// FIXME autoreload
-	// if autoreload {
-	// 	err := db.autoreload()
-	// 	if err != nil {
-	// 		return db, err
-	// 	}
-	// }
-
-	// FIXME
-	// if db.Empty() {
-	// 	db.dblog.Info().Msgf("could not find any extensions at %v", root)
-	// } else {
-	// 	stats := db.Stats()
-	// 	db.dblog.Info().Msgf("database contains %v extensions with a total of %v versions", stats.ExtensionCount, stats.VersionCount)
-	// }
 
 	return db, err
 }
 
-func (db *Database) load() error {
-	// start := time.Now()
-	// db.dblog.Debug().Msg("loading database")
-	// exts := []vscode.Extension{}
-	// for _, extensionRoot := range db.listExtensions() {
-	// 	db.dblog.Debug().Str("path", extensionRoot).Msg("loading extension")
-	// 	ext, err := db.loadExtension(extensionRoot)
-	// 	if err != nil {
-	// 		db.dblog.Error().Err(err).Str("path", extensionRoot).Msg("error while loading extension, skipping")
-	// 		continue
-	// 	}
-	// 	versions, _ := db.listVersions(ext)
-	// 	if len(versions) == 0 {
-	// 		// db.dblog.Info().Str("path", extensionRoot).Msg("extension does not have any versions, skipping")
-	// 		db.dblog.Info().Str("path", extensionRoot).Msg("extension does not have any versions")
-	// 		// continue
-	// 	}
-	// 	for _, version := range versions {
-	// 		versionRoot := VersionDir(db.root, ext, version)
-	// 		db.dblog.Debug().Str("path", versionRoot).Msg("loading version")
-	// 		version.Path = versionRoot
-	// 		version.AssetURI = db.assetEndpoint + VersionDir("", ext, version)
-	// 		version.FallbackAssetURI = version.AssetURI
-	// 		version.Files = db.versionAssets(versionRoot)
-	// 		ext.Versions = append(ext.Versions, version)
-	// 	}
-	// 	exts = append(exts, ext)
-	// }
-	// db.items = exts
-	// db.sortVersions()
-
-	// db.loadDuration = time.Since(start)
-	// db.loadedAt = time.Now()
-	// db.dblog.Debug().Msgf("loading database took %.3fs", db.loadDuration.Seconds())
-	return nil
+func (db Database) List() []vscode.Extension {
+	exts := []vscode.Extension{}
+	db.items.Range(func(key, value any) bool {
+		exts = append(exts, value.(vscode.Extension))
+		return true
+	})
+	return exts
 }
 
-// extensionPath returns the asset path for a given ExtensionTag
-func (db Database) extensionPath(uid vscode.UniqueID) string {
-	return filepath.Join(db.root, uid.Publisher, uid.Name)
+func (db Database) ListUniqueIDs() []vscode.UniqueID {
+	uids := []vscode.UniqueID{}
+	db.items.Range(func(key, value any) bool {
+		uids = append(uids, key.(vscode.UniqueID))
+		return true
+	})
+	return uids
 }
 
-// assetPath returns the asset path for a given ExtensionTag
-func (db Database) assetPath(tag vscode.VersionTag) string {
-	return filepath.Join(db.extensionPath(tag.UniqueID), tag.Version, tag.TargetPlatform)
+func (db Database) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, bool) {
+	anyext, found := db.items.Load(uid)
+	if !found {
+		return vscode.Extension{}, false
+	}
+	return anyext.(vscode.Extension), found
+}
+
+func (db Database) FindByVersionTag(tag vscode.VersionTag) (vscode.Extension, bool) {
+	ext, found := db.FindByUniqueID(tag.UniqueID)
+	if !found {
+		return ext, false
+	}
+	if _, found := ext.VersionByTag(tag); found {
+		return ext, true
+	}
+	return vscode.Extension{}, false
 }
 
 func (db Database) SaveExtensionMetadata(ext vscode.Extension) error {
-	// uid, ok := vscode.Parse(ext.UniqueID())
-	// if !ok {
-	// 	return fmt.Errorf("extension unique id %s is not valid", ext.ID)
-	// }
 	// clear version information, this is saved per version later on
 	ext.Versions = []vscode.Version{}
 	if err := db.fs.MkdirAll(db.extensionPath(ext.UniqueID()), 0755); err != nil {
@@ -160,4 +140,154 @@ func (db Database) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, r
 	}
 	fpath := filepath.Join(p, string(atype))
 	return afero.WriteReader(db.fs, fpath, r)
+}
+
+func (db Database) fsListUniqueID() ([]vscode.UniqueID, error) {
+	uids := []vscode.UniqueID{}
+	paths, err := afero.Glob(db.fs, filepath.Join("*/**"))
+	if err != nil {
+		return uids, err
+	}
+	for _, p := range paths {
+		uid := vscode.UniqueID{Publisher: filepath.Dir(p), Name: filepath.Base(p)}
+		uids = append(uids, uid)
+	}
+	return uids, nil
+}
+
+// fsListVersionTags lists all (partial) version tags for a unique id. Please not the tag
+// is partial since the tag is created from the storage path and not the version metadata
+// which leads to the pre-release flag is not be used.
+func (db Database) fsListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, error) {
+	tags := []vscode.VersionTag{}
+	paths, err := afero.Glob(db.fs, filepath.Join(db.extensionPath(uid), "*/**"))
+	if err != nil {
+		return tags, err
+	}
+	for _, p := range paths {
+		vpath, err := filepath.Rel(db.extensionPath(uid), p)
+		if err != nil {
+			return tags, err
+		}
+		t := vscode.VersionTag{
+			UniqueID:       uid,
+			Version:        filepath.Dir(vpath),
+			TargetPlatform: filepath.Base(vpath),
+		}
+		tags = append(tags, t)
+	}
+	return tags, nil
+}
+
+func (db Database) index() error {
+	uids, err := db.fsListUniqueID()
+	if err != nil {
+		return err
+	}
+
+	const maxGoroutines = 10 // Limit to 3 concurrent goroutines
+	sem := make(chan struct{}, maxGoroutines)
+	wg := sync.WaitGroup{}
+	var indexingError error
+	for _, uid := range uids {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sem <- struct{}{} // Block if the semaphore is full
+			defer func() { <-sem }()
+
+			ext, err := db.loadExtensionMetadata(uid)
+			if err != nil {
+				indexingError = fmt.Errorf("indexing failed for extension %s: %w", uid.String(), err)
+			}
+			if err := db.loadAllVersionMetadata(&ext); err != nil {
+				indexingError = fmt.Errorf("indexing failed for extension %s: %w", uid.String(), err)
+			}
+			db.items.Store(uid, ext)
+		}()
+	}
+	wg.Wait()
+	if indexingError != nil {
+		return indexingError
+	}
+	return nil
+}
+
+// loadAllVersionMetadata populates the extension with the metadata from all versions
+// in storage.
+func (db Database) loadAllVersionMetadata(ext *vscode.Extension) error {
+	tags, err := db.fsListVersionTags(ext.UniqueID())
+	if err != nil {
+		return err
+	}
+	ext.Versions = []vscode.Version{}
+	for _, tag := range tags {
+		vmeta, err := db.loadVersionMetadata(tag)
+		if err != nil {
+			return err
+		}
+		ext.Versions = append(ext.Versions, vmeta)
+	}
+	sort.Slice(ext.Versions, func(i, j int) bool {
+		return semver.Compare("v"+ext.Versions[i].Version, "v"+ext.Versions[j].Version) > 0
+	})
+	return nil
+}
+
+func (db Database) loadVersionMetadata(tag vscode.VersionTag) (vscode.Version, error) {
+	vmeta := vscode.Version{}
+	bites, err := afero.ReadFile(db.fs, filepath.Join(db.assetPath(tag), versionMetadataFilename))
+	if err != nil {
+		return vscode.Version{}, err
+	}
+	return vmeta, json.Unmarshal(bites, &vmeta)
+}
+
+// ValidateVersion check if all assets for the given version exist in the database.
+func (db Database) ValidateVersion(tag vscode.VersionTag) error {
+	vmeta, err := db.loadVersionMetadata(tag)
+	if err != nil {
+		return err
+	}
+	for _, asset := range vmeta.Files {
+		found, err := afero.Exists(db.fs, filepath.Join(db.assetPath(tag), string(asset.Type)))
+		if err != nil {
+			return err
+		}
+		if !found {
+			return ErrMissingAsset
+		}
+	}
+	return nil
+}
+
+func (db Database) loadExtensionMetadata(uid vscode.UniqueID) (vscode.Extension, error) {
+	ext := vscode.Extension{}
+	s, err := afero.Glob(db.fs, filepath.Join(db.extensionPath(uid), extensionMetadataFilename))
+	if err != nil {
+		return vscode.Extension{}, err
+	}
+	if len(s) != 1 {
+		if len(s) == 0 {
+			return vscode.Extension{}, ErrExtensionMetadataNotFound
+		}
+		return vscode.Extension{}, errors.New("multiple metadata files found, this should not happen")
+	}
+
+	bites, err := afero.ReadFile(db.fs, s[0])
+	if err != nil {
+		return vscode.Extension{}, err
+	}
+
+	return ext, json.Unmarshal(bites, &ext)
+}
+
+// extensionPath returns the asset path for a given ExtensionTag
+func (db Database) extensionPath(uid vscode.UniqueID) string {
+	return filepath.Join(uid.Publisher, uid.Name)
+}
+
+// assetPath returns the asset path for a given ExtensionTag
+func (db Database) assetPath(tag vscode.VersionTag) string {
+	return filepath.Join(db.extensionPath(tag.UniqueID), tag.Version, tag.TargetPlatform)
 }
