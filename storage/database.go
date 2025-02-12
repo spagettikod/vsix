@@ -9,7 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -103,15 +103,30 @@ func (db Database) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, bool) 
 	return anyext.(vscode.Extension), found
 }
 
-func (db Database) FindByVersionTag(tag vscode.VersionTag) (vscode.Extension, bool) {
+func (db Database) FindByVersionTag(tag vscode.VersionTag) (vscode.Version, bool) {
 	ext, found := db.FindByUniqueID(tag.UniqueID)
 	if !found {
-		return ext, false
+		return vscode.Version{}, false
 	}
-	if _, found := ext.VersionByTag(tag); found {
-		return ext, true
+	if v, found := ext.VersionByTag(tag); found {
+		return v, true
 	}
-	return vscode.Extension{}, false
+	return vscode.Version{}, false
+}
+
+// FindByTargetPlatforms returns all extensions having versions for the given target platform(s).
+func (db Database) FindByTargetPlatforms(targetPlatforms ...string) []vscode.Extension {
+	exts := []vscode.Extension{}
+	for _, ext := range db.List() {
+		for _, v := range ext.Versions {
+			if slices.Contains(targetPlatforms, v.TargetPlatform()) {
+				exts = append(exts, ext)
+				// exit version loop and continue with the next extension since we've found one match
+				break
+			}
+		}
+	}
+	return exts
 }
 
 func (db Database) SaveExtensionMetadata(ext vscode.Extension) error {
@@ -228,8 +243,8 @@ func (db Database) loadAllVersionMetadata(ext *vscode.Extension) error {
 		}
 		ext.Versions = append(ext.Versions, vmeta)
 	}
-	sort.Slice(ext.Versions, func(i, j int) bool {
-		return semver.Compare("v"+ext.Versions[i].Version, "v"+ext.Versions[j].Version) > 0
+	slices.SortFunc(ext.Versions, func(v1, v2 vscode.Version) int {
+		return semver.Compare("v"+v1.Version, "v"+v2.Version) * -1
 	})
 	return nil
 }

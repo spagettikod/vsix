@@ -64,7 +64,7 @@ pre-release-flag.
     $ vsix add --data extensions redhat.java 
 
   Add 100 most popular extensions
-    $ vsix add --data extensions $(vsix search --limit 100)
+    $ vsix add --data extensions $(vsix search --limit 100 --quiet)
 `,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),
