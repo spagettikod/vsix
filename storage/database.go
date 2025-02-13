@@ -300,7 +300,7 @@ func (db Database) index() error {
 		return err
 	}
 
-	const maxGoroutines = 10 // Limit to 3 concurrent goroutines
+	const maxGoroutines = 10 // limit to 10 concurrent extensions
 	sem := make(chan struct{}, maxGoroutines)
 	wg := sync.WaitGroup{}
 	var indexingError error
@@ -308,7 +308,7 @@ func (db Database) index() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			sem <- struct{}{} // Block if the semaphore is full
+			sem <- struct{}{} // block if the semaphore is full
 			defer func() { <-sem }()
 
 			ext, err := db.loadExtensionMetadata(uid)
