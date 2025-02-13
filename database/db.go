@@ -417,7 +417,7 @@ func (db *DB) Run(q marketplace.Query) (vscode.Results, error) {
 	// sort the result
 	switch q.SortBy() {
 	case marketplace.ByInstallCount:
-		sort.Sort(vscode.ByPopularity(extensions))
+		// sort.Sort(vscode.ByPopularity(extensions))
 	}
 
 	// paginate

@@ -55,13 +55,19 @@ const (
 	StatisticInstall StatisticName = "install"
 )
 
-// Sort extensions by installs in descending order
-type ByPopularity []Extension
+// SortFuncExtensionByInstallCount func to use for slices.SortFunc to sort extensions by install count, most installs comes first.
+var SortFuncExtensionByInstallCount = func(e1, e2 Extension) int {
+	if e1.InstallCount() < e2.InstallCount() {
+		return 1
+	} else if e1.InstallCount() > e2.InstallCount() {
+		return -1
+	}
+	return 0
+}
 
-func (a ByPopularity) Len() int      { return len(a) }
-func (a ByPopularity) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a ByPopularity) Less(i, j int) bool {
-	return a[i].Statistic(string(StatisticInstall)) > a[j].Statistic(string(StatisticInstall))
+// SortFuncExtensionByDisplayName func to use for slices.SortFunc to sort extensions by display name, most installs comes first.
+var SortFuncExtensionByDisplayName = func(e1, e2 Extension) int {
+	return strings.Compare(strings.ToLower(e1.DisplayName), strings.ToLower(e2.DisplayName))
 }
 
 // Assets return the assets for a certain version of an extension.
@@ -232,4 +238,39 @@ func (e Extension) VersionByTag(tag VersionTag) (Version, bool) {
 		}
 	}
 	return Version{}, false
+}
+
+// RewriteAssetURL returns a copy of the extension but where the assets are directed to the local VSIX serve external URL.
+func (e Extension) RewriteAssetURL(externalURL string) Extension {
+	cp := e
+	cp.Versions = []Version{}
+	for _, v := range e.Versions {
+		cpVersion := v
+		cpVersion.Files = []Asset{}
+		for _, a := range v.Files {
+			cpAsset := a
+			tag := v.Tag(e.UniqueID())
+			cpAsset.Source = fmt.Sprintf("%s/%s", externalURL, tag.Pattern(a.Type))
+			// TODO these were set in previous versions, are they necessary
+			// e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
+			// e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
+			cpVersion.Files = append(cpVersion.Files, cpAsset)
+		}
+		cp.Versions = append(cp.Versions, cpVersion)
+	}
+	return cp
+}
+
+// MatchesQuery test if the extension matches any of the text terms in the input.
+func (e Extension) MatchesQuery(terms ...string) bool {
+	for _, term := range terms {
+		term := strings.ToLower(term)
+		if strings.Contains(e.Name, term) ||
+			strings.Contains(e.DisplayName, term) ||
+			strings.Contains(e.Publisher.Name, term) ||
+			strings.Contains(e.ShortDescription, term) {
+			return true
+		}
+	}
+	return false
 }

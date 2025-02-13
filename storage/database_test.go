@@ -7,7 +7,7 @@ import (
 )
 
 func TestExtensionPath(t *testing.T) {
-	expected := "/data/redhat/java"
+	expected := "redhat/java"
 	db, err := OpenMem()
 	if err != nil {
 		t.Fatal("unexpected error opening database")
@@ -24,7 +24,7 @@ func TestExtensionPath(t *testing.T) {
 }
 
 func TestAssetPath(t *testing.T) {
-	expected := "/data/redhat/java/1.2.3/darwin-arm64"
+	expected := "redhat/java/1.2.3/darwin-arm64"
 	db, err := OpenMem()
 	if err != nil {
 		t.Fatal("unexpected error opening database")

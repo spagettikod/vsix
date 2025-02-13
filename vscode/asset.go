@@ -10,12 +10,6 @@ import (
 
 type AssetTypeKey string
 
-type Asset struct {
-	Type   AssetTypeKey `json:"assetType"`
-	Source string       `json:"source"`
-	Path   string       `json:"-"`
-}
-
 const (
 	Manifest         AssetTypeKey = "Microsoft.VisualStudio.Code.Manifest"
 	ContentChangelog AssetTypeKey = "Microsoft.VisualStudio.Services.Content.Changelog"
@@ -51,6 +45,12 @@ func StrToAssetType(assetType string) (AssetTypeKey, error) {
 	default:
 		return "nil", fmt.Errorf("unknown asset type: %v", assetType)
 	}
+}
+
+type Asset struct {
+	Type   AssetTypeKey `json:"assetType"`
+	Source string       `json:"source"`
+	Path   string       `json:"-"`
 }
 
 func NewAsset(assetType AssetTypeKey, source string) Asset {

@@ -6,19 +6,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"path"
-	"strings"
 	"time"
 
-	"github.com/justinas/alice"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/hlog"
-	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/database"
 	"github.com/spagettikod/vsix/marketplace"
+	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
@@ -30,8 +25,6 @@ const (
 func init() {
 	serveCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
-	serveCmd.Flags().StringVar(&serveCert, "cert", "", "certificate file if serving with TLS [VSIX_CERT_FILE]")
-	serveCmd.Flags().StringVar(&serveKey, "key", "", "certificate key file if serving with TLS [VSIX_KEY_FILE]")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -56,70 +49,32 @@ below.
 	Example:               `  $ vsix serve --data extensions --cert myserver.crt --key myserver.key https://www.example.com/vsix`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		externalURL := EnvOrArg("VSIX_EXTERNAL_URL", args, 0)
-		// setup URLs and server root
-		server, apiRoot, assetRoot, err := parseEndpoints(externalURL)
+		argGrp := slog.Group("args", "cmd", "serve", "path", dbPath, "addr", serveAddr, "external_url", EnvOrArg("VSIX_EXTERNAL_URL", args, 0))
+
+		// get the path for the external URL to build the actual path
+		extURL, err := url.Parse(EnvOrArg("VSIX_EXTERNAL_URL", args, 0))
 		if err != nil {
-			fmt.Printf("given URL is not valid: %s\n", externalURL)
+			slog.Error("could not parse external url, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
 
-		// load database of extensions
-		root := "."
-		if len(dbPath) > 0 {
-			root = dbPath
-		}
-		db, err := database.OpenFs(root, true)
+		db, err := storage.OpenFs(dbPath)
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("could not open database, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
 
-		stack := alice.New(
-			hlog.NewHandler(log.Logger),
-			hlog.RequestIDHandler("request_id", ""),
-			hlog.MethodHandler("method"),
-			hlog.URLHandler("url"),
-			hlog.RemoteAddrHandler("remote_addr"),
-			hlog.AccessHandler(func(r *http.Request, status, size int, duration time.Duration) {
-				hlog.FromRequest(r).Info().
-					Int("status", status).
-					Int64("request_size", r.ContentLength).
-					Int("response_size", size).
-					Dur("duration", time.Duration(duration.Microseconds())).
-					Msg("ACCESS")
-			}),
-		)
+		http.HandleFunc(fmt.Sprintf("OPTIONS %s/asset/%s", extURL.Path, vscode.AssetURLPattern), assetOptionsHandler(argGrp))
+		http.HandleFunc(fmt.Sprintf("GET %s/asset/%s", extURL.Path, vscode.AssetURLPattern), assetGetHandler(db, argGrp))
+		http.HandleFunc(fmt.Sprintf("OPTIONS %s/_gallery/{publisher}/{name}/latest", extURL.Path), latestOptionsHandler(argGrp))
+		http.HandleFunc(fmt.Sprintf("GET %s/_gallery/{publisher}/{name}/latest", extURL.Path), latestGetHandler(db, extURL.String()+"/asset", argGrp))
+		http.HandleFunc(fmt.Sprintf("OPTIONS %s/_apis/public/gallery/extensionquery", extURL.Path), queryOptionsHandler(argGrp))
+		http.HandleFunc(fmt.Sprintf("POST %s/_apis/public/gallery/extensionquery", extURL.Path), queryPostHandler(db, extURL.String()+"/asset", argGrp))
 
-		// setup and start server
-		http.Handle(assetRoot, stack.Then(assetHandler(db, "/"+assetRoot)))
-		http.Handle(apiRoot, stack.Then(queryHandler(db, server, assetRoot)))
-
-		log.Info().Msgf("Use this server in Visual Studio Code by setting \"serviceUrl\" in the file product.json to \"%s\"", server+apiRoot[:strings.LastIndex(apiRoot, "/")])
-		log.Debug().Msgf("assets are served from %s", server+assetRoot)
-		log.Debug().Msgf("API served from %s", server+apiRoot)
-
-		serveCert = EnvOrFlag("VSIX_CERT_FILE", serveCert)
-		serveKey = EnvOrFlag("VSIX_KEY_FILE", serveKey)
-
-		if serveCert == "" || serveKey == "" {
-			log.Info().
-				Str("cert", serveCert).
-				Str("key", serveKey).
-				Msg("Certificiate and key were not given, starting without TLS")
-			if err := http.ListenAndServe(serveAddr, nil); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-		} else {
-			log.Info().
-				Str("cert", serveCert).
-				Str("key", serveKey).
-				Msg("Certificiate and key were specified, starting with TLS")
-			if err := http.ListenAndServeTLS(serveAddr, serveCert, serveKey, nil); err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
+		slog.Info("starting VSIX Server", argGrp)
+		if err := http.ListenAndServe(serveAddr, nil); err != nil {
+			slog.Error("error while serving, exiting", "error", err, argGrp)
+			os.Exit(1)
 		}
 	},
 }
@@ -136,167 +91,195 @@ func EnvOrArg(env string, args []string, idx int) string {
 	return ""
 }
 
-func parseEndpoints(externalURL string) (server string, apiRoot string, assetRoot string, err error) {
-	if len(externalURL) < 5 {
-		err = fmt.Errorf("invalid URL")
-		return
-	}
-	if externalURL[:5] != "https" && externalURL[:4] != "http" {
-		err = fmt.Errorf("URL is missing protocol")
-		return
-	}
-	u, err := url.Parse(externalURL)
-	if err != nil {
-		return
-	}
-	server = u.Scheme + "://" + u.Host
-	externalURL = u.Path
-	if externalURL == "" {
-		externalURL = "/"
-	}
-
-	if externalURL[len(externalURL)-1:] == "/" {
-		apiRoot = externalURL + "extensionquery"
-		assetRoot = externalURL + assetURLPath
-	} else {
-		apiRoot = externalURL + "/extensionquery"
-		assetRoot = externalURL + "/" + assetURLPath
-	}
-	return
-}
-
-func assetHandler(db *database.DB, assetURLPath string) http.Handler {
+func assetOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
 
-		switch r.Method {
-		case http.MethodOptions:
-			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
-		case http.MethodGet:
-			hlog.FromRequest(r).Debug().Msgf("extracting filename from path: %s", r.URL.Path)
-			// assemble filename from request URL
-			filePath := path.Join(db.Root(), r.URL.Path[len(assetURLPath)-1:])
-
-			// set content type top json if returned file path is a manifest
-			if strings.Contains(filePath, "Manifest") {
-				hlog.FromRequest(r).Debug().Str("filePath", filePath).Msg("requested file is a manifest setting content type to application/json")
-				w.Header().Set("Content-Type", "application/json")
-			}
-
-			// open the file from local storage
-			hlog.FromRequest(r).Debug().Str("filePath", filePath).Msg("opening file")
-			file, err := os.Open(filePath)
-			if err != nil {
-				serverError(w, r, fmt.Errorf("error opening file: %v", err))
-				return
-			}
-			defer file.Close()
-
-			// return file as gzip
-			w.Header().Set("Content-Encoding", "gzip")
-			gw := gzip.NewWriter(w)
-			defer gw.Close()
-			hlog.FromRequest(r).Debug().Str("filePath", filePath).Msg("sending file")
-			_, err = io.Copy(gw, file)
-			if err != nil {
-				serverError(w, r, fmt.Errorf("error transmitting file: %v", err))
-				return
-			}
+		// extract asset identifiers from url
+		_, _, err := vscode.ParseAssetURL(r)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			slog.Error("error parsing asset url", "error", err, requestGroup(r), argGrp)
+			return
 		}
+		w.WriteHeader(http.StatusNoContent)
+		slog.Debug("request complete", "elapsedTime", time.Since(start).Round(time.Millisecond), requestGroup(r), argGrp)
 	})
 }
 
-func queryHandler(db *database.DB, server, assetRoot string) http.Handler {
+func assetGetHandler(db *storage.Database, argGrp slog.Attr) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 
-		switch r.Method {
-		case http.MethodOptions:
-			w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+		// extract asset identifiers from url
+		tag, assetType, err := vscode.ParseAssetURL(r)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			slog.Error("error parsing asset url", "error", err, requestGroup(r), argGrp)
 			return
-		case http.MethodPost:
-			if strings.Index(r.Header.Get("Content-Type"), "application/json") == 0 {
-				hlog.FromRequest(r).Debug().Msg("reading HTTP body")
-				b, err := io.ReadAll(r.Body)
-				if err != nil {
-					serverError(w, r, fmt.Errorf("error while reading request body: %v", err))
-					return
-				}
-				query := marketplace.Query{}
-				hlog.FromRequest(r).Debug().Msg("unmarshaling JSON")
-				err = json.Unmarshal(b, &query)
-				if err != nil {
-					serverError(w, r, fmt.Errorf("error while unmarshaling request: %v", err))
-					return
-				}
+		}
 
-				debugRequest(r, query)
+		// load the asset from database
+		f, err := db.LoadAsset(tag, assetType)
+		if err != nil {
+			if os.IsNotExist(err) {
+				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+				slog.Error("asset not found", "error", err, requestGroup(r), argGrp)
+				return
+			}
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			slog.Error("error opening asset", "error", err, requestGroup(r), argGrp)
+			return
+		}
+		defer f.Close()
 
-				results, err := db.Run(query)
-				if err != nil {
-					if err == marketplace.ErrInvalidQuery {
-						hlog.FromRequest(r).Info().Msg("query contained in the request is not valid")
-						http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-					} else {
-						serverError(w, r, fmt.Errorf("error while querying the local storage: %v", err))
-					}
-					return
-				}
-				results.SetAssetEndpoint(server + assetRoot)
+		// determine content type and set headers
+		contentType, err := db.DetectAssetContentType(tag, assetType)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			slog.Error("error detecting asset content type", "error", err, requestGroup(r), argGrp)
+			return
+		}
+		w.Header().Set("Content-Type", contentType)
 
-				hlog.FromRequest(r).Debug().Msg("marshaling results to JSON")
-				b, err = json.Marshal(results)
-				if err != nil {
-					serverError(w, r, fmt.Errorf("error while marshaling results: %v", err))
-					return
-				}
+		// gzip the response and write file in response
+		gw := gzip.NewWriter(w)
+		defer gw.Close()
+		w.Header().Set("Content-Encoding", "gzip")
+		if _, err = io.Copy(w, f); err != nil {
+			slog.Error("error sending asset file", "error", err, requestGroup(r), argGrp)
+			return
+		}
+		slog.Debug("request complete", "elapsedTime", time.Since(start).Round(time.Millisecond), requestGroup(r), argGrp)
+	})
+}
 
-				w.Header().Set("Content-Type", "application/json; charset=utf-8")
-				hlog.FromRequest(r).Debug().Msg("sending response")
-				if _, err = io.Copy(w, bytes.NewBuffer(b)); err != nil {
-					serverError(w, r, fmt.Errorf("error while sending results: %v", err))
-					return
-				}
+func latestOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
 
-				debugResponse(r, results)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
 
+		// extract unique identifier from URL pattern
+		_, ok := vscode.Parse(fmt.Sprintf("%s.%s", r.PathValue("publisher"), r.PathValue("name")))
+		if !ok {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			slog.Error("error parsing unique id", requestGroup(r), argGrp)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		slog.Debug("request complete", "elapsedTime", time.Since(start).Round(time.Millisecond), requestGroup(r), argGrp)
+	})
+}
+
+func latestGetHandler(db *storage.Database, assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Security-Policy", "connect-src 'self' http://localhost:8080;")
+
+		// extract unique identifier from URL pattern
+		uid, ok := vscode.Parse(fmt.Sprintf("%s.%s", r.PathValue("publisher"), r.PathValue("name")))
+		if !ok {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			slog.Error("error parsing unique id", requestGroup(r), argGrp)
+			return
+		}
+
+		ext, found := db.FindByUniqueID(uid)
+		if !found {
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			slog.Info("extension not found", requestGroup(r), argGrp)
+			return
+		}
+
+		// convert all external asset URL's to point to this VSIX serve instance instead of externally
+		ext = ext.RewriteAssetURL(assetURLPrefix)
+
+		bites, err := json.Marshal(ext)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			slog.Error("error marshaling extension metadata to json", "error", err, requestGroup(r), argGrp)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := w.Write(bites); err != nil {
+			slog.Error("error sending extension metadata response", "error", err, requestGroup(r), argGrp)
+		}
+
+		slog.Debug("request complete", "elapsedTime", time.Since(start).Round(time.Millisecond), requestGroup(r), argGrp)
+	})
+}
+
+func queryOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+
+		w.WriteHeader(http.StatusNoContent)
+		slog.Debug("request complete", "elapsedTime", time.Since(start).Round(time.Millisecond), requestGroup(r), argGrp)
+	})
+}
+
+func queryPostHandler(db *storage.Database, assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		bites, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			slog.Error("error reading body", "error", err, requestGroup(r), argGrp)
+			return
+		}
+		defer r.Body.Close()
+
+		query := marketplace.Query{}
+		err = json.Unmarshal(bites, &query)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			slog.Error("error unmarshaling query json", "error", err, requestGroup(r), argGrp)
+			return
+		}
+
+		results, err := db.Run(query)
+		if err != nil {
+			if err == marketplace.ErrInvalidQuery {
+				slog.Error("query contained in the request is not valid", "error", err)
+				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			} else {
-				hlog.FromRequest(r).Debug().Msg("incoming request is not application/json, skipping this request")
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				slog.Error("error running query", "error", err, requestGroup(r), argGrp)
 			}
+			return
 		}
+		results.RewriteAssetURL(assetURLPrefix)
+
+		bites, err = json.Marshal(results)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			slog.Error("error marshaling query reponse json", "error", err, requestGroup(r), argGrp)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		if _, err = io.Copy(w, bytes.NewBuffer(bites)); err != nil {
+			slog.Error("error sending query reponse", "error", err, requestGroup(r), argGrp)
+			return
+		}
+
+		slog.Debug("request complete", "elapsedTime", time.Since(start).Round(time.Millisecond), requestGroup(r), argGrp)
 	})
 }
 
-func serverError(w http.ResponseWriter, r *http.Request, err error) {
-	hlog.FromRequest(r).Error().
-		Err(err).
-		Send()
-	http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-}
-
-func debugRequest(r *http.Request, query marketplace.Query) {
-	if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
-		headers := ""
-		for k, v := range r.Header {
-			headers = fmt.Sprintf("%s%s: %v\n", headers, k, strings.Join(v, ","))
-		}
-		hlog.FromRequest(r).Debug().Msg(headers)
-		b, err := json.MarshalIndent(query, "", "  ")
-		if err != nil {
-			log.Error().Err(err).Msg("error while logging request query")
-			return
-		}
-		hlog.FromRequest(r).Debug().Msg(string(b))
-	}
-}
-
-func debugResponse(r *http.Request, results vscode.Results) {
-	if hlog.FromRequest(r).GetLevel() <= zerolog.DebugLevel {
-		b, err := json.MarshalIndent(results, "", "  ")
-		if err != nil {
-			log.Error().Err(err).Msg("error while logging query response")
-			return
-		}
-		hlog.FromRequest(r).Debug().Msg(string(b))
-	}
+func requestGroup(r *http.Request) slog.Attr {
+	return slog.Group("request", "method", r.Method, "url", r.URL)
 }
