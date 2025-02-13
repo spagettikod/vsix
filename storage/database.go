@@ -49,6 +49,12 @@ func OpenMem() (*Database, error) {
 }
 
 func OpenFs(root string) (*Database, error) {
+	if exists, err := afero.DirExists(afero.NewOsFs(), root); !exists || err != nil {
+		if !exists {
+			return nil, fmt.Errorf("database path not found")
+		}
+		return nil, err
+	}
 	return open(afero.NewBasePathFs(afero.NewOsFs(), root), root)
 }
 

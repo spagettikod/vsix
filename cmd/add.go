@@ -80,13 +80,7 @@ pre-release-flag.
 
 		// loop all args (extension unique identifiers)
 		extensionsToAdd := []marketplace.ExtensionRequest{}
-		for _, arg := range args {
-			uid, ok := vscode.Parse(arg)
-			if !ok {
-				slog.Error("invalid unique id, exiting", "uniqueId", arg)
-				os.Exit(1)
-				return
-			}
+		for _, uid := range argsToUniqueIDOrExit(args) {
 			er := marketplace.ExtensionRequest{
 				UniqueID:        uid,
 				TargetPlatforms: targetPlatforms,
@@ -96,52 +90,7 @@ pre-release-flag.
 		}
 		extensionsToAdd = marketplace.Deduplicate(extensionsToAdd)
 
-		slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
-
-		skipped := 0
-		matched := 0
-		assets := 0
-		bar := progressbar.NewOptions(len(extensionsToAdd),
-			progressbar.OptionShowCount(),
-			progressbar.OptionEnableColorCodes(true),
-			progressbar.OptionSetVisibility(!(verbose || debug)),
-			progressbar.OptionShowDescriptionAtLineEnd(),
-			progressbar.OptionSetPredictTime(false),
-			progressbar.OptionSetElapsedTime(true),
-		)
-		for _, er := range extensionsToAdd {
-			extStart := time.Now()
-			bar.Describe(er.UniqueID.String() + ": downloading metadata")
-			res, err := FetchAndSaveMetadata(db, er)
-			if err != nil {
-				slog.Error("error fetching extension metadata", "error", err, "uniqueId", er.UniqueID)
-				bar.Add(1)
-				continue
-			}
-			skipped += res.VersionsSkipped
-			matched += len(res.Versions)
-			extAsset := 0
-			for _, v := range res.Versions {
-				for _, a := range v.Files {
-					bar.Describe(er.UniqueID.String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
-					aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
-					slog.Debug("saving asset", aGrp, argGrp)
-					size, err := FetchAndSaveAsset(db, v.Tag(er.UniqueID), a)
-					if err != nil {
-						slog.Error("error saving asset, continuing with next asset", "error", err, aGrp, argGrp)
-						continue
-					}
-					slog.Debug("asset downloaded", "contentLength", size)
-					assets++
-					extAsset++
-				}
-			}
-			slog.Info("extension processed", slog.Group("extension", "uniqueId", er.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
-			bar.Add(1)
-		}
-		statusGrp := slog.Group("versions", "found", matched+skipped, "matched", matched, "skipped", skipped, "downloadedAssets", assets)
-		slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
-		fmt.Println("")
+		CommonFetchAndSave(db, extensionsToAdd, start, argGrp)
 	},
 }
 
@@ -149,6 +98,55 @@ type RequestResult struct {
 	VersionsSkipped int
 	TotalAssets     int
 	Versions        []vscode.Version
+}
+
+func CommonFetchAndSave(db *storage.Database, extensionsToAdd []marketplace.ExtensionRequest, start time.Time, argGrp slog.Attr) {
+	slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
+
+	skipped := 0
+	matched := 0
+	assets := 0
+	bar := progressbar.NewOptions(len(extensionsToAdd),
+		progressbar.OptionShowCount(),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetVisibility(!(verbose || debug)),
+		progressbar.OptionShowDescriptionAtLineEnd(),
+		progressbar.OptionSetPredictTime(false),
+		progressbar.OptionSetElapsedTime(true),
+	)
+	for _, er := range extensionsToAdd {
+		extStart := time.Now()
+		bar.Describe(er.UniqueID.String() + ": downloading metadata")
+		res, err := FetchAndSaveMetadata(db, er)
+		if err != nil {
+			slog.Error("error fetching extension metadata", "error", err, "uniqueId", er.UniqueID)
+			bar.Add(1)
+			continue
+		}
+		skipped += res.VersionsSkipped
+		matched += len(res.Versions)
+		extAsset := 0
+		for _, v := range res.Versions {
+			for _, a := range v.Files {
+				extAsset++
+				bar.Describe(er.UniqueID.String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
+				aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
+				slog.Debug("saving asset", aGrp, argGrp)
+				size, err := FetchAndSaveAsset(db, v.Tag(er.UniqueID), a)
+				if err != nil {
+					slog.Error("error saving asset, continuing with next asset", "error", err, aGrp, argGrp)
+					continue
+				}
+				slog.Debug("asset downloaded", "contentLength", size)
+				assets++
+			}
+		}
+		slog.Info("extension processed", slog.Group("extension", "uniqueId", er.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
+		bar.Add(1)
+	}
+	statusGrp := slog.Group("versions", "found", matched+skipped, "matched", matched, "skipped", skipped, "downloadedAssets", assets)
+	slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
+	fmt.Println("")
 }
 
 func FetchAndSaveMetadata(db *storage.Database, request marketplace.ExtensionRequest) (RequestResult, error) {
@@ -198,4 +196,17 @@ func FetchAndSaveAsset(db *storage.Database, tag vscode.VersionTag, asset vscode
 	slen := resp.Header.Get("Content-length")
 	ilen, _ := strconv.ParseInt(slen, 10, 64)
 	return ilen, db.SaveAsset(tag, asset.Type, resp.Body)
+}
+
+func argsToUniqueIDOrExit(args []string) []vscode.UniqueID {
+	uids := []vscode.UniqueID{}
+	for _, arg := range args {
+		uid, ok := vscode.Parse(arg)
+		if !ok {
+			slog.Error("invalid unique id, exiting", "uniqueId", arg)
+			os.Exit(1)
+		}
+		uids = append(uids, uid)
+	}
+	return uids
 }

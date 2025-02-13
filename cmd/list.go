@@ -23,7 +23,7 @@ func init() {
 }
 
 var listCmd = &cobra.Command{
-	Use:     "list [prefix]",
+	Use:     "list [flags] [prefix]",
 	Aliases: []string{"ls"},
 	Short:   "List downloaded extensions",
 	Long: `List extensions available locally. By default all extension
