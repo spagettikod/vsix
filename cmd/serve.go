@@ -30,21 +30,19 @@ func init() {
 
 var serveCmd = &cobra.Command{
 	Use:   "serve [flags] <external URL>",
-	Short: "Run your own marketplace and serve the extensions in your local storage",
+	Short: "Run your own marketplace and serve the extensions from your local storage",
 	Long: `Run your own marketplace and serve the extensions in your local storage.
 
-This command will start a HTTPS server that is compatible with Visual Studio Code.
+This command will start a server that is compatible with Visual Studio Code.
 When setup you can browse, search and install extensions previously downloaded
-using the add command. If the update-command is run and new extensions are
-downloaded while the serve-command is running it will automatically update with
-the newly downloaded extensions. 
+using the add command. 
 
-To enable Visual Studio Code integration you must change the tag serviceUrl in
-the file project.json in your Visual Studio Code installation. On MacOS, for
-example, the file is located at
-/Applications/Visual Studio Code.app/Contents/Resources/app/product.json. Set
-the URL to your server, for example https://vsix.example.com:8080, see examples
-below.
+Since URL's of extensions are modified serve needs to know where it can be found.
+For example setting the external URL to 'https://my.server.com/vsix' will generate
+URL's starting with 'https://my.server.com/vsix'.
+
+Serve only listens on http but Visual Studio Code requires https-endpoints. Use
+a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 `,
 	Example:               `  $ vsix serve --data extensions --cert myserver.crt --key myserver.key https://www.example.com/vsix`,
 	DisableFlagsInUseLine: true,
