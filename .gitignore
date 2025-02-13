@@ -2,3 +2,4 @@ _data/*
 _local/*
 _pkg/*
 .DS_Store
+_local/*

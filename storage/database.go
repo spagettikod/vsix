@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/afero"
 	"golang.org/x/mod/semver"
@@ -155,6 +157,98 @@ func (db Database) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, r
 	}
 	fpath := filepath.Join(p, string(atype))
 	return afero.WriteReader(db.fs, fpath, r)
+}
+
+func (db Database) LoadAsset(tag vscode.VersionTag, assetType vscode.AssetTypeKey) (io.ReadCloser, error) {
+	return db.fs.Open(filepath.Join(db.assetPath(tag), string(assetType)))
+}
+
+func (db Database) DetectAssetContentType(tag vscode.VersionTag, assetType vscode.AssetTypeKey) (string, error) {
+	file, err := db.fs.Open(filepath.Join(db.assetPath(tag), string(assetType)))
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	buffer := make([]byte, 512)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return "", err
+	}
+
+	return http.DetectContentType(buffer), nil
+}
+
+// Run will execute all aspects of a marketplace.Query against the database. This includes
+// querying, sorting, limiting and paging.
+func (db Database) Run(q marketplace.Query) (vscode.Results, error) {
+	res := vscode.NewResults()
+
+	extensions := []vscode.Extension{}
+
+	if !q.IsValid() {
+		return res, marketplace.ErrInvalidQuery
+	}
+
+	if q.IsEmptyQuery() {
+		// empty queries sorted by number of installs equates to a @popular query
+		extensions = append(extensions, db.List()...)
+	} else {
+		uniqueIDs := q.CriteriaValues(marketplace.FilterTypeExtensionName)
+		if len(uniqueIDs) > 0 {
+			for _, uidstr := range uniqueIDs {
+				uid, ok := vscode.Parse(uidstr)
+				if !ok {
+					return res, fmt.Errorf("invalid unique id in query %s", uidstr)
+				}
+				if ext, found := db.FindByUniqueID(uid); found {
+					extensions = append(extensions, ext)
+				}
+			}
+		}
+
+		searchValues := q.CriteriaValues(marketplace.FilterTypeSearchText)
+		if len(searchValues) > 0 {
+			for _, e := range db.List() {
+				if e.MatchesQuery(searchValues...) {
+					extensions = append(extensions, e)
+				}
+			}
+		}
+	}
+
+	// set total count to all extensions found, before some might be removed if paginated
+	res.SetTotalCount(len(extensions))
+
+	// sort the result
+	switch q.SortBy() {
+	case marketplace.ByInstallCount:
+		slices.SortFunc(extensions, vscode.SortFuncExtensionByInstallCount)
+	case marketplace.ByName:
+		slices.SortFunc(extensions, vscode.SortFuncExtensionByDisplayName)
+	}
+
+	// paginate
+	begin, end := pageBoundaries(len(extensions), q.Filters[0].PageSize, q.Filters[0].PageNumber)
+
+	// add sorted and paginated extensions to the result
+	res.AddExtensions(extensions[begin:end])
+
+	return res, nil
+}
+
+// pageBoundaries return the begin and end index for a given page size and page. Indices
+// can be used when slicing arrays/slices.
+func pageBoundaries(totalCount, pageSize, pageNumber int) (begin, end int) {
+	if pageNumber < 1 {
+		pageNumber = 1
+	}
+	begin = ((pageNumber - 1) * pageSize)
+	end = begin + pageSize
+	if end > totalCount {
+		end = totalCount
+	}
+	return
 }
 
 func (db Database) fsListUniqueID() ([]vscode.UniqueID, error) {

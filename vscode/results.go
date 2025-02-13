@@ -2,7 +2,6 @@ package vscode
 
 import (
 	"encoding/json"
-	"path"
 )
 
 type Results struct {
@@ -67,16 +66,10 @@ func (r Results) Contains(e Extension) bool {
 	return false
 }
 
-func (r Results) SetAssetEndpoint(assetEndpoint string) {
+func (r Results) RewriteAssetURL(externalURL string) {
 	for _, res := range r.Results {
-		for _, e := range res.Extensions {
-			for j, v := range e.Versions {
-				for i, f := range v.Files {
-					v.Files[i].Source = assetEndpoint + f.Source
-					e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
-					e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
-				}
-			}
+		for i := range res.Extensions {
+			res.Extensions[i] = res.Extensions[i].RewriteAssetURL(externalURL)
 		}
 	}
 }
