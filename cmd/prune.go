@@ -1,15 +1,16 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
-	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog/log"
-	"github.com/spagettikod/vsix/database"
+	"github.com/olekukonko/tablewriter"
+	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +20,9 @@ var rmEmptyExt bool
 
 func init() {
 	pruneCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
-	pruneCmd.Flags().BoolVar(&rmEmptyExt, "rm-empty-ext", false, "remove extensions without any versions")
-	pruneCmd.Flags().IntVar(&keep, "keep-versions", 0, "number of versions to keep, 0 keeps all (default 0)")
-	pruneCmd.Flags().BoolVar(&dry, "dry", false, "execute command without actually removing anything")
+	pruneCmd.Flags().IntVar(&keep, "keep", 0, "number of versions to keep, 0 keeps all (default 0)")
+	pruneCmd.Flags().BoolVar(&dry, "dry-run", false, "execute command without actually removing anything")
+	pruneCmd.Flags().BoolVarP(&force, "force", "f", false, "don't prompt for confirmation before deleting")
 	rootCmd.AddCommand(pruneCmd)
 }
 
@@ -47,94 +48,95 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 	Example:               "  $ vsix prune --data extensions --keep-versions 2",
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		p, err := filepath.Abs(dbPath)
-		if err != nil {
-			log.Fatal().Str("command", "prune").Err(err).Send()
-		}
-
-		logger := log.With().Str("path", p).Str("command", "prune").Logger()
 		start := time.Now()
+		argGrp := slog.Group("args", "prune", "add", "path", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
-		// begin by cleaning local storage
-		cleanResult, err := database.CleanDBFiles(p)
+		db, results, err := storage.Open(dbPath)
 		if err != nil {
-			logger.Fatal().Err(err).Send()
-		}
-		if len(cleanResult.Removed) == 0 && len(cleanResult.Optional) == 0 {
-			logger.Info().Msg("local storage did not need any cleanup")
-		}
-		for _, file := range cleanResult.Removed {
-			logger.Info().Msgf("removing file: %s", file)
-			if !dry {
-				os.RemoveAll(file)
-			}
-		}
-		if len(cleanResult.Optional) > 0 {
-			if dry || !rmEmptyExt {
-				fmt.Printf("the following extensions did not have any versions, use \"vsix add\" to add versions or run this command again with the flag --rm-empty-ext:\n\n")
-				for _, file := range cleanResult.Optional {
-					file, _ = filepath.Rel(p, file)
-					fmt.Printf("   %s\n", strings.Replace(file, "/", ".", 1))
-				}
-			}
-
-			if !dry && rmEmptyExt {
-				for _, file := range cleanResult.Optional {
-					dir := filepath.Dir(file)
-					logger.Info().Msgf("removing file: %s", dir)
-					os.RemoveAll(dir)
-				}
-			}
+			slog.Error("failed open database, exiting", "error", err, argGrp)
+			os.Exit(1)
 		}
 
 		if keep > 0 {
-			db, err := database.OpenFs(p, false)
-			if err != nil {
-				log.Fatal().Err(err).Str("data_root", p).Msg("could not open folder")
-			}
-			exts := db.List(false)
-			for _, ext := range exts {
-				versions := ext.Versions
-				// filter out the top level versions if multi platform, we
-				// assume all platform version of a top level version are release
-				// approximately at the same time so we disregard the release date
-				if ext.IsMultiPlatform(true) {
-					logger.Debug().Str("extension", ext.UniqueID().String()).Msg("multi platform extension, cleaning away platform versions and keeping top level version")
-					vermap := map[string]vscode.Version{}
-					for _, v := range versions {
-						vermap[v.Version] = v
-					}
-					versions = nil
-					for _, v := range vermap {
-						logger.Debug().Str("extension", ext.UniqueID().String()).Str("version", v.Version).Msg("keeping top level version")
-						versions = append(versions, v)
-					}
-				}
-				if len(versions) <= keep {
-					logger.Info().Str("extension", ext.UniqueID().String()).Msgf("skipping prune, too few versions")
-					continue
-				}
-				// sort by updated date, latest first
-				sort.Slice(versions, func(i, j int) bool {
-					return versions[i].LastUpdated.After(versions[j].LastUpdated)
+			for _, ext := range db.List() {
+				// reduce to keep only the version numbers, we'll prune versions regardless of platform
+				reducedVersions := slices.CompactFunc(ext.Versions, func(v1, v2 vscode.Version) bool {
+					return v1.Version == v2.Version
 				})
-				for _, v := range versions[:keep] {
-					logger.Info().Str("extension", ext.UniqueID().String()).Str("version", v.Version).Msg("keeping version")
-				}
-				for _, v := range versions[keep:] {
-					if dry {
-						logger.Info().Str("extension", ext.UniqueID().String()).Str("version", v.Version).Msg("would be removed without dry run")
-					} else {
-						err := db.DeleteVersion(ext, v)
-						if err != nil {
-							logger.Err(err).Send()
+				if len(reducedVersions) > keep { // are there more versions than we want to keep?
+					for _, v := range reducedVersions[keep:] { // loop through all versions we don't want to keep
+						res := storage.ValidationError{
+							Tag:   vscode.VersionTag{UniqueID: ext.UniqueID(), Version: v.Version},
+							Error: fmt.Errorf("version pruning, keep %v latest versions", keep),
 						}
+						results = append(results, res)
 					}
 				}
 			}
-		} else {
-			logger.Info().Msg("versions will not be pruned")
 		}
-		logger.Info().Msgf("total time for prune %.3fs", time.Since(start).Seconds())
+
+		if dry {
+			printValidationErrorsTable(results)
+			os.Exit(0)
+		} else {
+			if !force { // print items that will be removed before confirmation
+				printValidationErrorsTable(results)
+				if len(results) == 0 { // exit if we printed nothing
+					os.Exit(0)
+				}
+				fmt.Println("-----")
+			}
+			if force || confirm() {
+				for _, result := range results {
+					if force { // force prints removed tags
+						fmt.Println(result.Tag)
+					}
+					if err := db.Remove(result.Tag); err != nil {
+						slog.Error("remove failed, exiting", "error", err, argGrp)
+						os.Exit(1)
+					}
+				}
+			} else {
+				fmt.Println("prune aborted")
+			}
+		}
+
+		slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), argGrp)
 	},
+}
+
+func printValidationErrorsTable(verrs []storage.ValidationError) {
+	data := [][]string{}
+	for _, verr := range verrs {
+		extData := []string{}
+		extData = append(extData, verr.Tag.String())
+		extData = append(extData, verr.Error.Error())
+		data = append(data, extData)
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Object", "Reason"})
+	table.SetAutoWrapText(false)
+	table.SetAutoFormatHeaders(true)
+	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetCenterSeparator("")
+	table.SetColumnSeparator("")
+	table.SetRowSeparator("")
+	table.SetHeaderLine(false)
+	table.SetBorder(false)
+	table.SetTablePadding("\t") // pad with tabs
+	table.SetNoWhiteSpace(true)
+	table.AppendBulk(data) // Add Bulk Data
+	table.Render()
+}
+
+func confirm() bool {
+	reader := bufio.NewReader(os.Stdin)
+
+	fmt.Print("Listed items will be removed, are you sure you want to continue? (y/N): ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input) // Remove any trailing newline characters
+
+	return strings.ToLower(input) == "y"
 }

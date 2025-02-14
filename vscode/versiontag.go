@@ -1,12 +1,20 @@
 package vscode
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 const (
-	AssetURLPattern = "{publisher}/{name}/{version}/{platform}/{type}"
+	VersionTagVersionSeparator        = "@"
+	VersionTagTargetPlatformSeparator = ":"
+	AssetURLPattern                   = "{publisher}/{name}/{version}/{platform}/{type}"
+)
+
+var (
+	ErrInvalidVersionTag = errors.New("invalid version tag")
 )
 
 // VersionTag is a unique identifier for a combination of
@@ -18,8 +26,56 @@ type VersionTag struct {
 	PreRelease     bool
 }
 
+// tagSplit splits the tag with the given separator returning the remainder and the
+// split text. Example tagSplit("a@b:c") would return a@b and c.
+func tagSplit(strTag, sep string) (string, string) {
+	split := strings.Split(strTag, sep)
+	if len(split) == 2 {
+		return split[0], split[1]
+	}
+	return strTag, ""
+}
+
+// ParseVersionTag parse string into a VersionTag. Valid format <UID>[:VERSION[:TARGET_PLATFORM]].
+func ParseVersionTag(strTag string) (VersionTag, error) {
+	remainder, platform := tagSplit(strTag, VersionTagTargetPlatformSeparator)
+	uidStr, version := tagSplit(remainder, VersionTagVersionSeparator)
+
+	// fail if
+	// * we have separators for version and target platform but the values are empty
+	// * we have target platform separator but no version
+	if (strings.Contains(strTag, VersionTagTargetPlatformSeparator) && platform == "") ||
+		(strings.Contains(strTag, VersionTagVersionSeparator) && version == "") ||
+		(strings.Contains(strTag, VersionTagTargetPlatformSeparator) && version == "") {
+		return VersionTag{}, fmt.Errorf("%w: %s", ErrInvalidVersionTag, strTag)
+	}
+
+	uid, ok := Parse(uidStr)
+	if !ok {
+		return VersionTag{}, fmt.Errorf("%w: could not parse unique id %s", ErrInvalidVersionTag, strTag)
+	}
+	return VersionTag{
+		UniqueID:       uid,
+		Version:        version,
+		TargetPlatform: platform}, nil
+}
+
+func (vt VersionTag) Validate() bool {
+	if vt.UniqueID.Valid() {
+		return !(vt.TargetPlatform != "" && vt.Version == "")
+	}
+	return false
+}
+
 func (vt VersionTag) String() string {
-	return fmt.Sprintf("%s@%s:%s", vt.UniqueID, vt.Version, vt.TargetPlatform)
+	str := vt.UniqueID.String()
+	if vt.Version != "" {
+		str += VersionTagVersionSeparator + vt.Version
+		if vt.TargetPlatform != "" {
+			str += VersionTagTargetPlatformSeparator + vt.TargetPlatform
+		}
+	}
+	return str
 }
 
 // Pattern will return the VersionTag as a URL path matching AssetURLPattern. Used when creating a URL compatible with VSIX serve for the given VersionTag.

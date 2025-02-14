@@ -44,11 +44,12 @@ pre-release-flag.`,
 		start := time.Now()
 		argGrp := slog.Group("args", "cmd", "update", "path", dbPath, "preRelease", preRelease)
 
-		db, err := storage.OpenFs(dbPath)
+		db, verrs, err := storage.Open(dbPath)
 		if err != nil {
 			slog.Error("could not open database, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
+		printValidationErrors(verrs)
 
 		extensionsToAdd := []marketplace.ExtensionRequest{}
 		if len(args) > 0 {

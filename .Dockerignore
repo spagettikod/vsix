@@ -1,6 +1,6 @@
-_data
-_example
-_local
-_scripts
-_pkg
-_local
+_data/
+_local/
+_pkg/
+.DS_Store
+_local/
+_scripts/

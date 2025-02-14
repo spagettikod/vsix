@@ -56,11 +56,12 @@ the unique tag for each version matching the filter.`,
 		}
 		argGrp := slog.Group("args", "cmd", "list", "data", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms, "prefix", prefix)
 		start := time.Now()
-		db, err := storage.OpenFs(dbPath)
+		db, verrs, err := storage.Open(dbPath)
 		if err != nil {
 			slog.Error("could not open database, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
+		printValidationErrors(verrs)
 
 		if quiet {
 			exts := filterExtensions(db, targetPlatforms, preRelease, prefix)

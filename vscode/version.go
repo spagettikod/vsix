@@ -3,7 +3,6 @@ package vscode
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"path"
 	"strings"
 	"time"
@@ -81,25 +80,6 @@ func (v Version) TargetPlatform() string {
 		return PlatformUniversal
 	}
 	return v.RawTargetPlatform
-}
-
-// Validate return true if all assets are valid. If the version
-// has no assets it is not valid.
-func (v Version) Validate() (bool, error) {
-	if len(v.Files) == 0 {
-		return false, nil
-	}
-	for _, a := range v.Files {
-		if valid, err := a.Validate(); !valid || err != nil {
-			if err != nil {
-				fmt.Println("error")
-				return false, err
-			}
-			fmt.Println("not valid")
-			return false, nil
-		}
-	}
-	return true, nil
 }
 
 func (v Version) Tag(uid UniqueID) VersionTag {
