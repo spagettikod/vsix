@@ -56,11 +56,12 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 			os.Exit(1)
 		}
 
-		db, err := storage.OpenFs(dbPath)
+		db, verrs, err := storage.Open(dbPath)
 		if err != nil {
 			slog.Error("could not open database, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
+		printValidationErrors(verrs)
 
 		http.HandleFunc(fmt.Sprintf("OPTIONS %s/asset/%s", extURL.Path, vscode.AssetURLPattern), assetOptionsHandler(argGrp))
 		http.HandleFunc(fmt.Sprintf("GET %s/asset/%s", extURL.Path, vscode.AssetURLPattern), assetGetHandler(db, argGrp))

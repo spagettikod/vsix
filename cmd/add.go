@@ -72,11 +72,12 @@ pre-release-flag.
 		start := time.Now()
 		argGrp := slog.Group("args", "cmd", "add", "path", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
-		db, err := storage.OpenFs(dbPath)
+		db, verrs, err := storage.Open(dbPath)
 		if err != nil {
 			slog.Error("could not open database, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
+		printValidationErrors(verrs)
 
 		// loop all args (extension unique identifiers)
 		extensionsToAdd := []marketplace.ExtensionRequest{}
@@ -113,6 +114,7 @@ func CommonFetchAndSave(db *storage.Database, extensionsToAdd []marketplace.Exte
 		progressbar.OptionShowDescriptionAtLineEnd(),
 		progressbar.OptionSetPredictTime(false),
 		progressbar.OptionSetElapsedTime(true),
+		progressbar.OptionClearOnFinish(),
 	)
 	for _, er := range extensionsToAdd {
 		extStart := time.Now()
@@ -129,7 +131,7 @@ func CommonFetchAndSave(db *storage.Database, extensionsToAdd []marketplace.Exte
 		for _, v := range res.Versions {
 			for _, a := range v.Files {
 				extAsset++
-				bar.Describe(er.UniqueID.String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
+				bar.Describe(v.Tag(er.UniqueID).String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
 				aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
 				slog.Debug("saving asset", aGrp, argGrp)
 				size, err := FetchAndSaveAsset(db, v.Tag(er.UniqueID), a)
@@ -146,7 +148,6 @@ func CommonFetchAndSave(db *storage.Database, extensionsToAdd []marketplace.Exte
 	}
 	statusGrp := slog.Group("versions", "found", matched+skipped, "matched", matched, "skipped", skipped, "downloadedAssets", assets)
 	slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
-	fmt.Println("")
 }
 
 func FetchAndSaveMetadata(db *storage.Database, request marketplace.ExtensionRequest) (RequestResult, error) {
@@ -209,4 +210,10 @@ func argsToUniqueIDOrExit(args []string) []vscode.UniqueID {
 		uids = append(uids, uid)
 	}
 	return uids
+}
+
+func printValidationErrors(verrs []storage.ValidationError) {
+	for _, verr := range verrs {
+		slog.Warn("invalid extension, run prune to fix", "version_tag", verr.Tag.String(), "validation_error", verr.Error)
+	}
 }

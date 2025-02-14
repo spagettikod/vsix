@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path"
 	"slices"
 
 	"github.com/rs/zerolog/log"
@@ -115,75 +114,6 @@ func (pe ExtensionRequest) String() string {
 		return pe.UniqueID.String()
 	}
 	return fmt.Sprintf("%s-%s", pe.UniqueID, pe.Version)
-}
-
-// rewrite this, half the code is the same as Download, recursive function complicates things,
-// maybe rethink the entire setup?
-func (pe ExtensionRequest) DownloadVSIXPackage(root string, preRelease bool) error {
-	elog := log.With().Str("extension", pe.UniqueID.String()).Str("dir", root).Logger()
-
-	elog.Debug().Msg("only VSIXPackage will be fetched")
-	elog.Debug().Msg("checking if output directory exists")
-	if exists, err := outDirExists(root); !exists {
-		return err
-	}
-
-	elog.Info().Msg("searching for extension at Marketplace")
-	ext, err := FetchExtension(pe.UniqueID.String())
-	if err != nil {
-		return err
-	}
-	if ext.IsExtensionPack() {
-		elog.Info().Msg("is extension pack, getting pack contents")
-		for _, pack := range ext.ExtensionPack() {
-			puid, _ := vscode.Parse(pack)
-			erPack := ExtensionRequest{UniqueID: puid}
-			err := erPack.DownloadVSIXPackage(root, preRelease)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	if pe.Version == "" {
-		elog.Debug().Msg("version was not specified, setting to latest version")
-		pe.Version = ext.LatestVersion(preRelease)
-	}
-	if _, found := ext.Version(pe.Version); !found {
-		return ErrVersionNotFound
-	}
-	elog = elog.With().Str("version", pe.Version).Logger()
-
-	elog.Debug().Msg("version has been determined")
-
-	if ext.IsMultiPlatform(preRelease) {
-		return ErrMultiplatformNotSupported
-	}
-
-	filename := path.Join(root, fmt.Sprintf("%s-%s.vsix", ext.UniqueID(), pe.Version))
-	elog = elog.With().Str("destination", filename).Logger()
-	elog.Debug().Msg("checking if destination already exists")
-	if _, err = os.Stat(filename); err == nil {
-		elog.Info().Msg("skipping download, version already exist at output path")
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-
-	asset, found := ext.Asset(pe.Version, vscode.VSIXPackage)
-	if !found {
-		return fmt.Errorf("version %s did not contain a VSIX package", pe.Version)
-	}
-	elog.Info().
-		Str("source", asset.Source).
-		Msg("downloading")
-	// download setting filename to asset type
-	b, err := asset.Download()
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filename, b, 0666)
 }
 
 // Download fetches metadata for the requested extension and returns it
