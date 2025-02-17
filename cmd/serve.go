@@ -18,10 +18,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	assetURLPath = "assets/"
-)
-
 func init() {
 	serveCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
