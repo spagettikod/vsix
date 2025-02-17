@@ -228,6 +228,7 @@ func (e Extension) Platforms() []string {
 		platforms = append(platforms, v.TargetPlatform())
 	}
 
+	slices.Sort(platforms)
 	return slices.Compact(platforms)
 }
 
@@ -269,6 +270,26 @@ func (e Extension) MatchesQuery(terms ...string) bool {
 			strings.Contains(e.DisplayName, term) ||
 			strings.Contains(e.Publisher.Name, term) ||
 			strings.Contains(e.ShortDescription, term) {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchesTargetPlatforms returns true if one of the given target platforms matches a platform in any of the versions.
+func (e Extension) MatchesTargetPlatforms(targetPlatforms ...string) bool {
+	for _, tp := range targetPlatforms {
+		if slices.Contains(e.Platforms(), tp) {
+			return true
+		}
+	}
+	return false
+}
+
+// HasPreRelease returns true if any of the versions are pre-release.
+func (e Extension) HasPreRelease() bool {
+	for _, v := range e.Versions {
+		if v.IsPreRelease() {
 			return true
 		}
 	}

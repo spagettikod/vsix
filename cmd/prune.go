@@ -15,9 +15,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var dry bool // execute in dry run mode
-var rmEmptyExt bool
-
 func init() {
 	pruneCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	pruneCmd.Flags().IntVar(&keep, "keep", 0, "number of versions to keep, 0 keeps all (default 0)")

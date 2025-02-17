@@ -114,3 +114,27 @@ func TestSortFuncByInstallCount(t *testing.T) {
 		t.Fatalf("expected %s got %s", expected, actual)
 	}
 }
+
+func TestMatchesTargetPlatform(t *testing.T) {
+	exts := []Extension{
+		{Versions: []Version{{RawTargetPlatform: ""}, {RawTargetPlatform: "web"}}},
+	}
+	type Case struct {
+		TargetPlatforms []string
+		Expected        bool
+	}
+	tests := []Case{
+		{TargetPlatforms: []string{"darwin-arm64", "web"}, Expected: true},
+		{TargetPlatforms: []string{"darwin-arm64"}, Expected: false},
+		{TargetPlatforms: []string{"darwin-arm64", "linux-x64"}, Expected: false},
+		{TargetPlatforms: []string{"universal"}, Expected: true},
+	}
+
+	for _, ext := range exts {
+		for _, test := range tests {
+			if ext.MatchesTargetPlatforms(test.TargetPlatforms...) != test.Expected {
+				t.Fatalf("%s: failed", test.TargetPlatforms)
+			}
+		}
+	}
+}
