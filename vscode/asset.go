@@ -48,11 +48,3 @@ type Asset struct {
 	Source string       `json:"source"`
 	Path   string       `json:"-"`
 }
-
-func NewAsset(assetType AssetTypeKey, source string) Asset {
-	return Asset{Type: assetType, Source: source}
-}
-
-func (a Asset) Is(t AssetTypeKey) bool {
-	return a.Type == t
-}

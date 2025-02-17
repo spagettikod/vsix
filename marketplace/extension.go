@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"slices"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/vscode"
 )
 
@@ -88,72 +86,6 @@ func (er ExtensionRequest) Equals(er2 ExtensionRequest) bool {
 		return len(er.TargetPlatforms) == len(er2.TargetPlatforms)
 	}
 	return false
-}
-
-// ValidTargetPlatform returns true if the given versions target platform
-// matches the platforms that were requested in the ExtensionRequest.
-func (pe ExtensionRequest) ValidTargetPlatform(v vscode.Version) bool {
-	// no target platform was given, all platforms are valid
-	if len(pe.TargetPlatforms) == 0 {
-		return true
-	}
-	// empty RawTargetPlatform means universal and is always valid
-	// if v.RawTargetPlatform == "" {
-	// 	return true
-	// }
-	for _, tp := range pe.TargetPlatforms {
-		if v.TargetPlatform() == tp {
-			return true
-		}
-	}
-	return false
-}
-
-func (pe ExtensionRequest) String() string {
-	if pe.Version == "" {
-		return pe.UniqueID.String()
-	}
-	return fmt.Sprintf("%s-%s", pe.UniqueID, pe.Version)
-}
-
-// Download fetches metadata for the requested extension and returns it
-// as an Extension struct.
-func (extReq ExtensionRequest) Download(preRelease bool) (vscode.Extension, error) {
-	elog := log.With().Str("extension", extReq.UniqueID.String()).Str("extension_version", extReq.Version).Logger()
-
-	elog.Debug().Msg("searching for extension at Marketplace")
-	ext, err := FetchExtension(extReq.UniqueID.String())
-	if err != nil {
-		return vscode.Extension{}, err
-	}
-
-	// set version to the latest if no version was given in the request
-	if extReq.Version == "" {
-		elog.Debug().Msg("version was not specified, setting to latest version")
-		extReq.Version = ext.LatestVersion(preRelease)
-	}
-
-	// only keep the requested (or latest, see above) version
-	ext = ext.KeepVersions(extReq.Version)
-	if len(ext.Versions) == 0 {
-		elog.Debug().Msg("requested version was not found at Marketplace")
-		return vscode.Extension{}, ErrVersionNotFound
-	}
-
-	elog.Debug().Str("extension_version", extReq.Version).Msg("found version at Marketplace")
-
-	return ext, nil
-}
-
-func outDirExists(path string) (bool, error) {
-	_, err := os.Stat(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return false, ErrOutDirNotFound
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
 }
 
 func (er ExtensionRequest) Matches(tag vscode.VersionTag) bool {

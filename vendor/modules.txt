@@ -1,16 +1,6 @@
-# github.com/fsnotify/fsnotify v1.8.0
-## explicit; go 1.17
-github.com/fsnotify/fsnotify
-github.com/fsnotify/fsnotify/internal
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/mattn/go-colorable v0.1.14
-## explicit; go 1.18
-github.com/mattn/go-colorable
-# github.com/mattn/go-isatty v0.0.20
-## explicit; go 1.15
-github.com/mattn/go-isatty
 # github.com/mattn/go-runewidth v0.0.16
 ## explicit; go 1.9
 github.com/mattn/go-runewidth
@@ -23,12 +13,6 @@ github.com/olekukonko/tablewriter
 # github.com/rivo/uniseg v0.4.7
 ## explicit; go 1.18
 github.com/rivo/uniseg
-# github.com/rs/zerolog v1.33.0
-## explicit; go 1.15
-github.com/rs/zerolog
-github.com/rs/zerolog/internal/cbor
-github.com/rs/zerolog/internal/json
-github.com/rs/zerolog/log
 # github.com/schollz/progressbar/v3 v3.18.0
 ## explicit; go 1.22
 github.com/schollz/progressbar/v3
