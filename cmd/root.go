@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"time"
 
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -19,23 +16,16 @@ var (
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			slog.SetLogLoggerLevel(slog.LevelWarn)
 			dbPath = EnvOrFlag("VSIX_DB_PATH", dbPath)
-			if !EnvOrFlagBool("VSIX_LOG_JSON", jsonLog) {
-				log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
-			}
-			zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 			if EnvOrFlagBool("VSIX_LOG_VERBOSE", verbose) {
 				slog.SetLogLoggerLevel(slog.LevelInfo)
-				zerolog.SetGlobalLevel(zerolog.InfoLevel)
 			}
 			if EnvOrFlagBool("VSIX_LOG_DEBUG", debug) {
 				slog.SetLogLoggerLevel(slog.LevelDebug)
-				zerolog.SetGlobalLevel(zerolog.DebugLevel)
 			}
 		},
 	}
 	verbose bool
 	debug   bool
-	jsonLog bool
 	// out                          string   // used by sub-commands
 	limit                        int      // used by sub-commands
 	sortByFlag                   string   // used by sub-commands
@@ -58,7 +48,6 @@ var (
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&debug, "debug", false, "turn on debug logging [VSIX_LOG_DEBUG]")
-	rootCmd.PersistentFlags().BoolVar(&jsonLog, "json", false, "log output as JSON [VSIX_LOG_JSON]")
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "turn on verbose logging [VSIX_LOG_VERBOSE]")
 }
 
@@ -67,7 +56,6 @@ func Execute(version string) {
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate(`{{printf "%s" .Version}}
 `)
-	log.Logger = log.With().Str("vsix_version", rootCmd.Version).Logger()
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

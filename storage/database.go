@@ -10,9 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
-	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/afero"
@@ -20,9 +18,8 @@ import (
 )
 
 const (
-	modFilename               string = ".modfile"
-	extensionMetadataFilename        = "_vsix_db_extension_metadata.json"
-	versionMetadataFilename          = "_vsix_db_version_metadata.json"
+	extensionMetadataFilename = "_vsix_db_extension_metadata.json"
+	versionMetadataFilename   = "_vsix_db_version_metadata.json"
 )
 
 var (
@@ -38,16 +35,8 @@ type ValidationError struct {
 }
 
 type Database struct {
-	items         *sync.Map
-	assetEndpoint string
-	loadDuration  time.Duration
-	loadedAt      time.Time
-	watcher       *fsnotify.Watcher
-	fs            afero.Fs
-}
-
-func openMem() (*Database, []ValidationError, error) {
-	return open(afero.NewMemMapFs())
+	items *sync.Map
+	fs    afero.Fs
 }
 
 func Open(root string) (*Database, []ValidationError, error) {
@@ -105,15 +94,6 @@ func (db Database) List() []vscode.Extension {
 	return exts
 }
 
-func (db Database) ListUniqueIDs() []vscode.UniqueID {
-	uids := []vscode.UniqueID{}
-	db.items.Range(func(key, value any) bool {
-		uids = append(uids, key.(vscode.UniqueID))
-		return true
-	})
-	return uids
-}
-
 func (db Database) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, bool) {
 	anyext, found := db.items.Load(uid)
 	if !found {
@@ -131,21 +111,6 @@ func (db Database) FindByVersionTag(tag vscode.VersionTag) (vscode.Version, bool
 		return v, true
 	}
 	return vscode.Version{}, false
-}
-
-// FindByTargetPlatforms returns all extensions having versions for the given target platform(s).
-func (db Database) FindByTargetPlatforms(targetPlatforms ...string) []vscode.Extension {
-	exts := []vscode.Extension{}
-	for _, ext := range db.List() {
-		for _, v := range ext.Versions {
-			if slices.Contains(targetPlatforms, v.TargetPlatform()) {
-				exts = append(exts, ext)
-				// exit version loop and continue with the next extension since we've found one match
-				break
-			}
-		}
-	}
-	return exts
 }
 
 func (db Database) SaveExtensionMetadata(ext vscode.Extension) error {
@@ -374,27 +339,6 @@ func (db Database) fsIndex() ([]ValidationError, error) {
 	}
 	wg.Wait()
 	return verrs, indexingError
-}
-
-// fsLoadAllVersionMetadata populates the extension with the metadata from all versions
-// in storage.
-func (db Database) fsLoadAllVersionMetadata(ext *vscode.Extension) error {
-	tags, err := db.fsListVersionTags(ext.UniqueID())
-	if err != nil {
-		return err
-	}
-	ext.Versions = []vscode.Version{}
-	for _, tag := range tags {
-		vmeta, err := db.fsLoadVersionMetadata(tag)
-		if err != nil {
-			return err
-		}
-		ext.Versions = append(ext.Versions, vmeta)
-	}
-	slices.SortFunc(ext.Versions, func(v1, v2 vscode.Version) int {
-		return semver.Compare("v"+v1.Version, "v"+v2.Version) * -1
-	})
-	return nil
 }
 
 func (db Database) fsLoadVersionMetadata(tag vscode.VersionTag) (vscode.Version, error) {

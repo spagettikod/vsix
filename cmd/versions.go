@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/marketplace"
 
 	"github.com/spf13/cobra"
@@ -21,10 +21,10 @@ var versionsCmd = &cobra.Command{
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Info().Str("identifier", args[0]).Msg("looking up extension at Marketplace")
+		argGrp := slog.Group("args", "cmd", "versions")
 		ext, err := marketplace.FetchExtension(args[0])
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("error fetching latest version from Marketplace", "error", err, argGrp)
 			os.Exit(1)
 		}
 		for _, v := range ext.Versions {

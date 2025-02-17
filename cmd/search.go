@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spf13/cobra"
 )
@@ -38,10 +38,10 @@ by flags.`,
 		if nolimit {
 			limit = 0
 		}
-		log.Info().Str("query", q).Msg("looking up extension at Marketplace")
+		argGrp := slog.Group("args", "cmd", "search", "limit", limit, "sort", sortByFlag, "preRelease", preRelease, "nolimit", nolimit, "quiet", quiet)
 		sortCritera, err := parseSortCriteria(sortByFlag)
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("error parsing sort criteria", "error", err, argGrp)
 			os.Exit(1)
 		}
 
@@ -52,7 +52,7 @@ by flags.`,
 
 		exts, err := query.RunAll(limit)
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("error querying Marketplace", "error", err, argGrp)
 			os.Exit(1)
 		}
 

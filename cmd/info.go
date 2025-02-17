@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"slices"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	"github.com/spagettikod/vsix/marketplace"
+	"github.com/spagettikod/vsix/vscode"
 
 	"github.com/spf13/cobra"
 )
@@ -33,10 +35,14 @@ which extentions the pack includes.
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Info().Str("identifier", args[0]).Msg("looking up extension at Marketplace")
-		ext, err := marketplace.FetchExtension(args[0])
+		argGrp := slog.Group("args", "cmd", "info", "preRelease", preRelease)
+		uid, ok := vscode.Parse(args[0])
+		if !ok {
+			slog.Error("invalid unique identifier", argGrp)
+		}
+		ext, err := marketplace.LatestVersion(uid, preRelease)
 		if err != nil {
-			fmt.Println(err)
+			slog.Error("error fetching latest version from Marketplace", "error", err, argGrp)
 			os.Exit(1)
 		}
 		s := `Name:                 %s
@@ -56,6 +62,7 @@ Extension pack:       %s
 		for _, v := range version {
 			targetPlatforms = append(targetPlatforms, v.TargetPlatform())
 		}
+		slices.Sort(targetPlatforms)
 		fmt.Printf(s,
 			ext.Name,
 			ext.Publisher.DisplayName,

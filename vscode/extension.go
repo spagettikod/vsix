@@ -70,52 +70,6 @@ var SortFuncExtensionByDisplayName = func(e1, e2 Extension) int {
 	return strings.Compare(strings.ToLower(e1.DisplayName), strings.ToLower(e2.DisplayName))
 }
 
-// Assets return the assets for a certain version of an extension.
-func (e Extension) Assets(version string) ([]Asset, bool) {
-	for _, v := range e.Versions {
-		if version == v.Version {
-			return v.Files, true
-		}
-	}
-	return []Asset{}, false
-}
-
-// Asset return the asset for a certain version on an extension.
-func (e Extension) Asset(version string, assetType AssetTypeKey) (Asset, bool) {
-	if assets, exists := e.Assets(version); exists {
-		for _, a := range assets {
-			if a.Is(assetType) {
-				return a, true
-			}
-		}
-	}
-	return Asset{}, false
-}
-
-func (e Extension) Copy() Extension {
-	e2 := e
-	e2.Categories = append([]string{}, e.Categories...)
-	e2.Tags = append([]string{}, e.Tags...)
-	e2.Statistics = append([]Statistic{}, e.Statistics...)
-	e2.Versions = []Version{}
-	for _, v := range e.Versions {
-		e2.Versions = append(e2.Versions, v.Copy())
-	}
-	return e2
-}
-
-func (e Extension) IsExtensionPack() bool {
-	return len(e.ExtensionPack()) > 0
-}
-
-func (e Extension) IsMultiPlatform(preRelease bool) bool {
-	v, _ := e.Version(e.LatestVersion(preRelease))
-	if len(v) > 1 {
-		return v[0].RawTargetPlatform != ""
-	}
-	return false
-}
-
 func (e Extension) ExtensionPack() []string {
 	pack := []string{}
 	if len(e.Versions) > 0 {
@@ -124,15 +78,6 @@ func (e Extension) ExtensionPack() []string {
 		}
 	}
 	return pack
-}
-
-func (e Extension) Statistic(name string) float32 {
-	for _, s := range e.Statistics {
-		if s.Name == name {
-			return s.Value
-		}
-	}
-	return 0
 }
 
 func (e Extension) UniqueID() UniqueID {
@@ -168,20 +113,6 @@ func (e Extension) RatingCount() int {
 		}
 	}
 	return -1
-}
-
-func (e Extension) KeepVersions(versions ...string) Extension {
-	newExt := e
-	// newExt.Versions = e.Versions
-	newExt.Versions = e.Versions[:0]
-	for _, v := range e.Versions {
-		for _, keep := range versions {
-			if v.Version == keep {
-				newExt.Versions = append(newExt.Versions, v)
-			}
-		}
-	}
-	return newExt
 }
 
 func (e Extension) String() string {
