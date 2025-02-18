@@ -1,4 +1,4 @@
-VERSION=4.0.0-beta1
+VERSION=4.0.0
 OUTPUT=_pkg
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
 
