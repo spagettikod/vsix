@@ -8,8 +8,8 @@ vsix is distributed as a single binary file. The current release support the ope
 <summary>macOS (Apple Silicon)</summary>
 
 ```shell
-curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.macos-arm64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix2.2.0.macos-arm64.tar.gz
+curl -OL https://github.com/spagettikod/vsix/releases/download/4.0.0/vsix4.0.0.macos-arm64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix4.0.0.macos-arm64.tar.gz
 ```
 </details>
 
@@ -17,8 +17,8 @@ sudo tar -C /usr/local/bin -xvf vsix2.2.0.macos-arm64.tar.gz
 <summary>Linux</summary>
 
 ```shell
-curl -OL https://github.com/spagettikod/vsix/releases/download/v2.2.0/vsix2.2.0.linux-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix2.2.0.linux-amd64.tar.gz
+curl -OL https://github.com/spagettikod/vsix/releases/download/4.0.0/vsix4.0.0.linux-amd64.tar.gz
+sudo tar -C /usr/local/bin -xvf vsix4.0.0.linux-amd64.tar.gz
 ```
 </details>
 
