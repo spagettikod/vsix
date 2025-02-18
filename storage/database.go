@@ -14,7 +14,6 @@ import (
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/afero"
-	"golang.org/x/mod/semver"
 )
 
 const (
@@ -330,9 +329,7 @@ func (db Database) fsIndex() ([]ValidationError, error) {
 
 				ext.Versions = append(ext.Versions, v)
 			}
-			slices.SortFunc(ext.Versions, func(v1, v2 vscode.Version) int {
-				return semver.Compare("v"+v1.Version, "v"+v2.Version) * -1
-			})
+			slices.SortFunc(ext.Versions, vscode.SortFuncVersion)
 
 			db.items.Store(uid, ext)
 		}()

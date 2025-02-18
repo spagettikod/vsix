@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -25,6 +27,13 @@ type Version struct {
 type Property struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+var SortFuncVersion = func(v1, v2 Version) int {
+	if semver.Compare("v"+v1.Version, "v"+v2.Version) == 0 {
+		return strings.Compare(v1.TargetPlatform(), v2.TargetPlatform())
+	}
+	return semver.Compare("v"+v1.Version, "v"+v2.Version) * -1
 }
 
 func (v Version) GetProperty(key string) (Property, bool) {

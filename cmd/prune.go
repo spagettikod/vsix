@@ -83,7 +83,7 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 				}
 				fmt.Println("-----")
 			}
-			if force || confirm() {
+			if force || confirm(len(results)) {
 				for _, result := range results {
 					if force { // force prints removed tags
 						fmt.Println(result.Tag)
@@ -93,8 +93,6 @@ For example: --keep-versions 2, will remove all versions except the latest two.
 						os.Exit(1)
 					}
 				}
-			} else {
-				fmt.Println("prune aborted")
 			}
 		}
 
@@ -128,10 +126,10 @@ func printValidationErrorsTable(verrs []storage.ValidationError) {
 	table.Render()
 }
 
-func confirm() bool {
+func confirm(items int) bool {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Print("Listed items will be removed, are you sure you want to continue? (y/N): ")
+	fmt.Printf("Listed %v items will be removed, are you sure you want to continue? (y/N): ", items)
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input) // Remove any trailing newline characters
 
