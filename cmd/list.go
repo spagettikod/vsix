@@ -25,38 +25,61 @@ func init() {
 }
 
 var listCmd = &cobra.Command{
-	Use:     "list [flags] [prefix]",
+	Use:     "list [flags] [query]",
 	Aliases: []string{"ls"},
-	Short:   "List downloaded extensions",
-	Long: `List extensions available locally. By default all extension
-versions are listed in a table format. Using an argument to the command
-will limit the result by only showing extensions where the unique
-identifier begins with the given prefix.
+	Short:   "List extensions in local database",
+	Long: `List extensions available locally. By default all extensions are listed
+in a table format. Use --all to list all extensions and their individual versions.
 
-Adding the --quiet flag, without any other flags will list only the
-unique identifiers for each extension.
+Using an argument to the command will limit the result by only showing extensions
+where the unique identifier contains the given text.
 
-If you want to limit which versions to show you can filter the result by
-using the --pre-release or the --platforms flags. The results are
-presented in a table format. Combining filters with --quiet will list
-the unique tag for each version matching the filter.`,
-	Example: `  List all extension versions where unique identifier starts with "redhat"
-    $ vsix ls --data extensions redhat
+If you want to limit which versions to show you can filter the result by using
+--pre-release or --platforms. The results are presented in a table format.
+Combining filters with --quiet will list the unique tag for each version matching
+the filter.
 
-  List all versions matching platforms linux-x64 and web
-    $ vsix ls --data extensions --platforms linux-x64,web
+Adding --quiet, without any other flags will list only the unique identifiers
+for each extension. Using --all together with --quiet will list the version tags
+for every version in the database.
 
-  Combine commands and remove all pre-release versions
-    $ vsix rm --data extensions $(vsix list --data extensions --pre-release --quiet)
+Tag-format
+----------
+This format extends the Marketplace defined Unique Identifier and enables you to
+specify version and target platform to better pin-point a certain release.
+
+Some examples:
+
+   ms-vscode.cpptools
+   ------------------
+   Unique identifier, this tag will remove the entire extension "ms-vscode.cpptools".
+   
+   ms-vscode.cpptools@1.24.1
+   -------------------------
+   Tag with version, this tag will remove version 1.24.1 (regardless of target platform)
+   for extension "ms-vscode.cpptools".
+   
+   ms-vscode.cpptools@1.24.1:win32-arm64
+   -------------------------------------
+   Tag with version and platform, this tag will remove platform "win32-arm64" in version
+   1.24.1 for extension "ms-vscode.cpptools`,
+	Example: `  List all extension versions where unique identifier starts with "redhat":
+    $ vsix list --data extensions redhat
+
+  List all versions matching platforms linux-x64 and web:
+    $ vsix list --data extensions --platforms linux-x64,web
+
+  Combine commands and remove all pre-release versions:
+    $ vsix remove --data extensions $(vsix list --data extensions --pre-release --all --quiet)
 `,
 	Args:                  cobra.MaximumNArgs(1),
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		prefix := ""
+		query := ""
 		if len(args) > 0 {
-			prefix = args[0]
+			query = args[0]
 		}
-		argGrp := slog.Group("args", "cmd", "list", "data", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms, "prefix", prefix)
+		argGrp := slog.Group("args", "cmd", "list", "data", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms, "prefix", query)
 		start := time.Now()
 		db, verrs, err := storage.Open(dbPath)
 		if err != nil {
@@ -65,7 +88,7 @@ the unique tag for each version matching the filter.`,
 		}
 		printValidationErrors(verrs)
 
-		fexts := filterExtensions(db.List(), targetPlatforms, preRelease, prefix)
+		fexts := filterExtensions(db.List(), targetPlatforms, preRelease, query)
 		if installs {
 			slices.SortFunc(fexts, vscode.SortFuncExtensionByInstallCount)
 		}

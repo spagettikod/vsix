@@ -18,15 +18,16 @@ func init() {
 
 var updateCmd = &cobra.Command{
 	Use:   "update [flags] [identifier...]",
-	Short: "Update extensions in the local storage with their latest version",
+	Short: "Update extensions in the database to their latest version",
 	Long: `Update will download the latest version of all the extensions currently in
-the local storage.
+the database.
 
 Only the latest version will be downloaded each time update is run. If the extension
 has had multiple releases between each run of update those versions will not be
 downloaded.
 
-Update will only update those platforms that already exist locally.
+Update will only update those platforms that already exist locally. Use the add-command
+to add more platforms to the database.
 
 To only update a limited set of extensions you can list one or more unique identifers
 and update will only update those.
@@ -51,7 +52,7 @@ pre-release-flag.`,
 		}
 		printValidationErrors(verrs)
 
-		extensionsToAdd := []marketplace.ExtensionRequest{}
+		extensionsToUpdate := []marketplace.ExtensionRequest{}
 		if len(args) > 0 {
 			for _, uid := range argsToUniqueIDOrExit(args) {
 				ext, found := db.FindByUniqueID(uid)
@@ -64,7 +65,7 @@ pre-release-flag.`,
 					TargetPlatforms: ext.Platforms(),
 					PreRelease:      preRelease,
 				}
-				extensionsToAdd = append(extensionsToAdd, er)
+				extensionsToUpdate = append(extensionsToUpdate, er)
 			}
 		} else {
 			for _, ext := range db.List() {
@@ -73,15 +74,15 @@ pre-release-flag.`,
 					TargetPlatforms: ext.Platforms(),
 					PreRelease:      preRelease,
 				}
-				extensionsToAdd = append(extensionsToAdd, er)
+				extensionsToUpdate = append(extensionsToUpdate, er)
 			}
 		}
-		extensionsToAdd = marketplace.Deduplicate(extensionsToAdd)
-		if len(extensionsToAdd) == 0 {
+		extensionsToUpdate = marketplace.Deduplicate(extensionsToUpdate)
+		if len(extensionsToUpdate) == 0 {
 			slog.Error("no extensions to update")
 			os.Exit(1)
 		}
 
-		CommonFetchAndSave(db, extensionsToAdd, start, argGrp)
+		CommonFetchAndSave(db, extensionsToUpdate, start, argGrp)
 	},
 }
