@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -24,6 +26,13 @@ type VersionTag struct {
 	Version        string
 	TargetPlatform string
 	PreRelease     bool
+}
+
+var SortFuncVersionTag = func(v1, v2 VersionTag) int {
+	if semver.Compare("v"+v1.Version, "v"+v2.Version) == 0 {
+		return strings.Compare(v1.TargetPlatform, v2.TargetPlatform)
+	}
+	return semver.Compare("v"+v1.Version, "v"+v2.Version) * -1
 }
 
 // tagSplit splits the tag with the given separator returning the remainder and the
@@ -52,7 +61,7 @@ func ParseVersionTag(strTag string) (VersionTag, error) {
 
 	uid, ok := Parse(uidStr)
 	if !ok {
-		return VersionTag{}, fmt.Errorf("%w: could not parse unique id %s", ErrInvalidVersionTag, strTag)
+		return VersionTag{}, fmt.Errorf("%w: could not parse unique id: %s", ErrInvalidVersionTag, strTag)
 	}
 	return VersionTag{
 		UniqueID:       uid,
