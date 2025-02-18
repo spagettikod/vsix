@@ -273,23 +273,3 @@ func QueryLastestVersionByText(query string, sortBy SortCriteria) Query {
 	// q.Filters[0].PageSize = limit
 	return q
 }
-
-func QueryLatestVersionByUniqueID(uniqueID string) Query {
-	q := NewQuery()
-	q.AddCriteria(Criteria{
-		FilterType: FilterTypeExtensionName,
-		Value:      uniqueID,
-	})
-	q.Flags = FlagIncludeLatestVersionOnly | FlagExcludeNonValidated | FlagIncludeAssetURI | FlagIncludeVersionProperties | FlagIncludeFiles | FlagIncludeCatergoryAndTags | FlagIncludeStatistics
-	return q
-}
-
-func QueryAllVersionsByUniqueID(uniqueID string) Query {
-	q := NewQuery()
-	q.AddCriteria(Criteria{
-		FilterType: FilterTypeExtensionID,
-		Value:      uniqueID,
-	})
-	q.Flags = FlagIncludeVersions | FlagIncludeFiles | FlagIncludeVersionProperties | FlagExcludeNonValidated | FlagIncludeStatistics
-	return q
-}

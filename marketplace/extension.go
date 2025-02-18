@@ -54,19 +54,6 @@ func LatestVersion(uid vscode.UniqueID, preRelease bool) (vscode.Extension, erro
 	return ext, nil
 }
 
-func FetchExtension(uniqueID string) (vscode.Extension, error) {
-	eqr, err := QueryLatestVersionByUniqueID(uniqueID).Run()
-	if err != nil {
-		return vscode.Extension{}, err
-	}
-	uuid := eqr.Results[0].Extensions[0].ID
-	eqr, err = QueryAllVersionsByUniqueID(uuid).Run()
-	if err != nil {
-		return vscode.Extension{}, err
-	}
-	return eqr.Results[0].Extensions[0], err
-}
-
 func (er ExtensionRequest) HasTargetPlatform(tp string) bool {
 	for _, t := range er.TargetPlatforms {
 		if tp == t {
