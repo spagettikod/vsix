@@ -25,24 +25,21 @@ func init() {
 
 var pruneCmd = &cobra.Command{
 	Use:   "prune [flags]",
-	Short: "Prune local storage",
-	Long: `Prune local storage.
+	Short: "Prune database",
+	Long: `Prune database from incomplete extensions or limit number of versions.
 
-By default, without any flags, this command will clean the local storage from any files
-and folders that don't belong there. These files and folders will be removed unless
-running with the --dry flag.
-
-If the command finds an extension without a version it will print the extensions
-unique identifier giving you a chance to add versions to the extension with the
-add-command. If you instead want the extensions removed you can run the command with
-the flag --rm-empty-ext.
+By default, without any flags, this command will print a list and prompt you
+before removing anything. The list shows you which items are affected and the
+reason why they will be removed by prune. You can also use --dry-run to show the
+list without prompting you for removal.
 
 Pruning versions
 ----------------
 Adding the --keep-versions X flag will keep the X latest versions and remove the rest.
-For example: --keep-versions 2, will remove all versions except the latest two.
 `,
-	Example:               "  $ vsix prune --data extensions --keep-versions 2",
+	Example: `  Keep the latest two versions and remove the rest:
+    $ vsix prune --data extensions --keep-versions 2
+`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
@@ -110,7 +107,7 @@ func printValidationErrorsTable(verrs []storage.ValidationError) {
 	}
 
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Object", "Reason"})
+	table.SetHeader([]string{"Item", "Reason"})
 	table.SetAutoWrapText(false)
 	table.SetAutoFormatHeaders(true)
 	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)

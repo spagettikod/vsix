@@ -26,8 +26,8 @@ func init() {
 
 var serveCmd = &cobra.Command{
 	Use:   "serve [flags] <external URL>",
-	Short: "Run your own marketplace and serve the extensions from your local storage",
-	Long: `Run your own marketplace and serve the extensions in your local storage.
+	Short: "Run your own marketplace and serve the extensions from your database",
+	Long: `Run your own marketplace and serve the extensions in your database.
 
 This command will start a server that is compatible with Visual Studio Code.
 When setup you can browse, search and install extensions previously downloaded
@@ -40,7 +40,7 @@ URL's starting with 'https://my.server.com/vsix'.
 Serve only listens on http but Visual Studio Code requires https-endpoints. Use
 a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 `,
-	Example:               `  $ vsix serve --data extensions --cert myserver.crt --key myserver.key https://www.example.com/vsix`,
+	Example:               `  $ vsix serve --data extensions https://www.example.com/vsix`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		argGrp := slog.Group("args", "cmd", "serve", "path", dbPath, "addr", serveAddr, "external_url", EnvOrArg("VSIX_EXTERNAL_URL", args, 0))

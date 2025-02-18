@@ -17,19 +17,17 @@ import (
 
 func init() {
 	dbAddCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
-	// FIXME disable this for now
-	// dbAddCmd.Flags().IntVar(&threads, "threads", 10, "number of simultaneous download threads")
 	dbAddCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list to limit which target platforms to add")
 	dbAddCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions, these are skipped by default")
 	rootCmd.AddCommand(dbAddCmd)
 }
 
 var dbAddCmd = &cobra.Command{
-	Use:   "add <identifier...>",
-	Short: "Add extension(s) from Marketplace to local storage",
-	Long: `Add extension(s) from Marketplace to local storage
+	Use:   "add [flags] <identifier...>",
+	Short: "Add extension(s) from Marketplace to local database",
+	Long: `Add extension(s) from Marketplace to local database.
 
-Downloads the latest version of the given extension(s) from Marketplace to local storage.
+Downloads the latest version of the given extension(s) from Marketplace to the local database.
 Once added, use the update command to keep the extension up to date with Marketplace. Use
 the serve-command to host your own Marketplace with the downloaded extensions.
 
@@ -38,33 +36,26 @@ Multiple identifiers, separated by space, can be used to add multiple extensions
 Target platforms
 ----------------
 By default all platform versions of an extension are added. You can limit which platforms
-to add by using the platforms-flag. This is a comma separated list of platforms. You can
-view available platforms for an extension by using the info-command. Please not that,
-if only those platforms given will be downloaded. The default "universal" platform will
-not be added is not included in the list.
-
-Known platforms:
-  * darwin-arm64
-  * darwin-x64
-  * linux-arm64
-  * linux-x64
-  * universal
-  * web
-  * win32-x64
+to add by using --platforms, which is a comma separated list of platforms. You can
+view available platforms for an extension by using the info-command. When using --platforms
+please note that only those platforms given will be downloaded. The default "universal"
+platform will not be added unless it is included in the list.
 
 Pre-releases
 ------------
 By default add skips extension versions marked as pre-release. If the latest version
 is marked as pre-release the add-command will traverse the list of versions until it
 finds the latest version not marked as pre-release. To enable adding an extension and
-selecting the latest version, regardless if marked as pre-release, use the
-pre-release-flag.
+selecting the latest version, regardless if marked as pre-release, use --pre-release.
 `,
-	Example: `  Add Java extension
+	Example: `  Add the Red Hat Java extension:
     $ vsix add --data extensions redhat.java 
 
-  Add 100 most popular extensions
+  Add 100 most popular extensions, download the latest version that is not a pre-release:
     $ vsix add --data extensions $(vsix search --limit 100 --quiet)
+
+  Add the 100 most popular extensions, use the latest version regardless if it's a pre-release or not:
+    $ vsix add --data extensions --pre-release $(vsix search --limit 100 --quiet)
 `,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),

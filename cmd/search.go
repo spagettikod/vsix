@@ -14,14 +14,13 @@ import (
 func init() {
 	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "limit number of results")
 	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install, rating, date")
-	searchCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions")
 	searchCmd.Flags().BoolVar(&nolimit, "nolimit", false, "disables the result limit, all matching results are shown")
 	searchCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "only print unique identifier")
 	rootCmd.AddCommand(searchCmd)
 }
 
 var searchCmd = &cobra.Command{
-	Use:   "search [query]",
+	Use:   "search [flags] [query]",
 	Short: "Query Marketplace for extensions.",
 	Long: `Search for extensions at Marketplace.
 
@@ -70,7 +69,7 @@ by flags.`,
 				extData = append(extData, ext.DisplayName)
 			}
 			extData = append(extData, ext.Publisher.DisplayName)
-			extData = append(extData, ext.LatestVersion(preRelease))
+			extData = append(extData, ext.LatestVersion(true)) // hard code to true since we only seem to get latest regardless of pre-release
 			extData = append(extData, ext.LastUpdated.Format(time.RFC3339))
 			extData = append(extData, fmt.Sprint(ext.InstallCount()))
 			avg := ext.AverageRating()

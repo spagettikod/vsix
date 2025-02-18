@@ -1,5 +1,5 @@
 # vsix
-Host your private [Marketplace](https://marketplace.visualstudio.com/) by downloading and serving extensions to Visual Studio Code in your own environment. The tool can be useful when working in air gapped environments but you still want access to Visual Studio Code extensions.
+Host your private [Marketplace](https://marketplace.visualstudio.com/) by downloading and serving extensions to Visual Studio Code in your own environment.
 
 ## Installation
 vsix is distributed as a single binary file. The current release support the operating systems and architectures below.
@@ -34,7 +34,7 @@ You can bind mount folders to `/data` in the container when working with downloa
 ```docker
 docker run --rm -it \
       -v $(pwd):/data \
-      spagettikod/vsix update /my_extensions_to_sync
+      spagettikod/vsix update
 ```
 </details>
 
@@ -42,19 +42,19 @@ docker run --rm -it \
 Create a folder where you store downloaded extensions.
 
 ```
-mkdir extensions
+mkdir my_extensions
 ```
 
 Add a few extensions you would like to have available off-line.
 
 ```
-vsix add --data extensions golang.Go gruntfuggly.todo-tree
+vsix add --data my_extensions golang.Go gruntfuggly.todo-tree
 ```
 
 Start your own marketplace serving the extensions you added above.
 
 ```
-vsix serve --data extensions https://vsix.myserver.com:8443/_apis/public/gallery myvsix.cert myvsix.key
+vsix serve --data my_extensions https://vsix.myserver.com:8443/_apis/public/gallery
 ```
 
 If you run your own DNS you can hijack `marketplace.visualstudio.com` and point it to your local server or you can modify `product.json` in your Visual Studio Code installation. The former has the benefit of not having to modify your local Visual Studio Code installation while the latter one needs to be reapplied after each update of Visual Studio Code. 

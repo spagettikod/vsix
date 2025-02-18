@@ -25,6 +25,7 @@ var (
 	ErrExtensionMetadataNotFound = errors.New("extension metadata missing")
 	ErrVersionMetadataNotFound   = errors.New("version metadata missing")
 	ErrMissingAsset              = errors.New("asset not found")
+	ErrNoVersions                = errors.New("extension has no versions")
 	ErrNotFound                  = errors.New("object not found")
 )
 
@@ -311,6 +312,10 @@ func (db Database) fsIndex() ([]ValidationError, error) {
 			if err != nil {
 				indexingError = err
 				return
+			}
+
+			if len(tags) == 0 {
+				verrs = append(verrs, ValidationError{Tag: vscode.VersionTag{UniqueID: uid}, Error: ErrNoVersions})
 			}
 
 			for _, tag := range tags {
