@@ -87,9 +87,14 @@ func (vt VersionTag) String() string {
 	return str
 }
 
-// Pattern will return the VersionTag as a URL path matching AssetURLPattern. Used when creating a URL compatible with VSIX serve for the given VersionTag.
-func (vt VersionTag) Pattern(assetType AssetTypeKey) string {
-	return fmt.Sprintf("%s/%s/%s/%s/%s", vt.UniqueID.Publisher, vt.UniqueID.Name, vt.Version, vt.TargetPlatform, string(assetType))
+// Pattern will return the VersionTag as a URL path.
+func (vt VersionTag) Pattern() string {
+	return fmt.Sprintf("%s/%s/%s/%s", vt.UniqueID.Publisher, vt.UniqueID.Name, vt.Version, vt.TargetPlatform)
+}
+
+// PatternByAssetType will return the VersionTag as a URL path matching AssetURLPattern. Used when creating a URL compatible with VSIX serve for the given VersionTag.
+func (vt VersionTag) PatternByAssetType(assetType AssetTypeKey) string {
+	return fmt.Sprintf("%s/%s", vt.Pattern(), string(assetType))
 }
 
 // ParseAssetURL parses the URL pattern in AssetURLPattern and return necessary objects needed to load the asset from database.

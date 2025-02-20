@@ -59,12 +59,12 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 		}
 		printValidationErrors(verrs)
 
-		http.HandleFunc(fmt.Sprintf("OPTIONS %s/asset/%s", extURL.Path, vscode.AssetURLPattern), assetOptionsHandler(argGrp))
-		http.HandleFunc(fmt.Sprintf("GET %s/asset/%s", extURL.Path, vscode.AssetURLPattern), assetGetHandler(db, argGrp))
-		http.HandleFunc(fmt.Sprintf("OPTIONS %s/_gallery/{publisher}/{name}/latest", extURL.Path), latestOptionsHandler(argGrp))
-		http.HandleFunc(fmt.Sprintf("GET %s/_gallery/{publisher}/{name}/latest", extURL.Path), latestGetHandler(db, extURL.String()+"/asset", argGrp))
-		http.HandleFunc(fmt.Sprintf("OPTIONS %s/_apis/public/gallery/extensionquery", extURL.Path), queryOptionsHandler(argGrp))
-		http.HandleFunc(fmt.Sprintf("POST %s/_apis/public/gallery/extensionquery", extURL.Path), queryPostHandler(db, extURL.String()+"/asset", argGrp))
+		http.HandleFunc(fmt.Sprintf("OPTIONS /asset/%s", vscode.AssetURLPattern), assetOptionsHandler(argGrp))
+		http.HandleFunc(fmt.Sprintf("GET /asset/%s", vscode.AssetURLPattern), assetGetHandler(db, argGrp))
+		http.HandleFunc("OPTIONS /_gallery/{publisher}/{name}/latest", latestOptionsHandler(argGrp))
+		http.HandleFunc("GET /_gallery/{publisher}/{name}/latest", latestGetHandler(db, extURL.String()+"/asset", argGrp))
+		http.HandleFunc("OPTIONS /_apis/public/gallery/extensionquery", queryOptionsHandler(argGrp))
+		http.HandleFunc("POST /_apis/public/gallery/extensionquery", queryPostHandler(db, extURL.String()+"/asset", argGrp))
 
 		slog.Info("starting VSIX Server", argGrp)
 		if err := http.ListenAndServe(serveAddr, nil); err != nil {
@@ -144,7 +144,7 @@ func assetGetHandler(db *storage.Database, argGrp slog.Attr) http.HandlerFunc {
 		gw := gzip.NewWriter(w)
 		defer gw.Close()
 		w.Header().Set("Content-Encoding", "gzip")
-		if _, err = io.Copy(w, f); err != nil {
+		if _, err = io.Copy(gw, f); err != nil {
 			slog.Error("error sending asset file", "error", err, requestGroup(r), argGrp)
 			return
 		}

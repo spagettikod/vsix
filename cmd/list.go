@@ -20,7 +20,7 @@ func init() {
 	listCmd.Flags().BoolVar(&preRelease, "pre-release", false, "limit result to only pre-release versions")
 	listCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "only print unique identifier")
 	listCmd.Flags().BoolVarP(&all, "all", "a", false, "print version details")
-	listCmd.Flags().BoolVar(&installs, "installs", false, "print version details")
+	listCmd.Flags().BoolVar(&installs, "installs", false, "sort by number of installs")
 	rootCmd.AddCommand(listCmd)
 }
 

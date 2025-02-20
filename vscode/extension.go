@@ -177,17 +177,16 @@ func (e Extension) RewriteAssetURL(externalURL string) Extension {
 	cp := e
 	cp.Versions = []Version{}
 	for _, v := range e.Versions {
+		tag := v.Tag(e.UniqueID())
 		cpVersion := v
 		cpVersion.Files = []Asset{}
 		for _, a := range v.Files {
 			cpAsset := a
-			tag := v.Tag(e.UniqueID())
-			cpAsset.Source = fmt.Sprintf("%s/%s", externalURL, tag.Pattern(a.Type))
-			// TODO these were set in previous versions, are they necessary
-			// e.Versions[j].AssetURI = assetEndpoint + path.Dir(f.Source)
-			// e.Versions[j].FallbackAssetURI = assetEndpoint + path.Dir(f.Source)
+			cpAsset.Source = fmt.Sprintf("%s/%s", externalURL, tag.PatternByAssetType(a.Type))
 			cpVersion.Files = append(cpVersion.Files, cpAsset)
 		}
+		cpVersion.AssetURI = fmt.Sprintf("%s/%s", externalURL, tag.Pattern())
+		cpVersion.FallbackAssetURI = fmt.Sprintf("%s/%s", externalURL, tag.Pattern())
 		cp.Versions = append(cp.Versions, cpVersion)
 	}
 	return cp
