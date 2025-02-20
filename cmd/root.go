@@ -35,6 +35,7 @@ var (
 	preRelease                   bool     // used by sub-commands
 	all                          bool     // used by sub-commands
 	dry                          bool     // used by sub-commands
+	removeEmpty                  bool     // used by sub-commands
 	installs                     bool     // used by sub-commands
 	force                        bool     // used by sub-commands
 	quiet                        bool     // used by sub-commands (search)
