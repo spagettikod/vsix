@@ -19,6 +19,7 @@ func init() {
 	pruneCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	pruneCmd.Flags().IntVar(&keep, "keep", 0, "number of versions to keep, 0 keeps all (default 0)")
 	pruneCmd.Flags().BoolVar(&dry, "dry-run", false, "execute command without actually removing anything")
+	pruneCmd.Flags().BoolVar(&removeEmpty, "remove-empty", false, "remove extensions without any versions")
 	pruneCmd.Flags().BoolVarP(&force, "force", "f", false, "don't prompt for confirmation before deleting")
 	rootCmd.AddCommand(pruneCmd)
 }
@@ -43,7 +44,7 @@ Adding the --keep-versions X flag will keep the X latest versions and remove the
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
-		argGrp := slog.Group("args", "prune", "add", "path", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms)
+		argGrp := slog.Group("args", "cmd", "prune", "path", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
 		db, results, err := storage.Open(dbPath)
 		if err != nil {
@@ -67,6 +68,12 @@ Adding the --keep-versions X flag will keep the X latest versions and remove the
 					}
 				}
 			}
+		}
+
+		if !removeEmpty { // flag --remove-empty was not set, we won't remove items that has no versions
+			results = slices.DeleteFunc(results, func(ve storage.ValidationError) bool {
+				return ve.Error == storage.ErrNoVersions
+			})
 		}
 
 		if dry {
