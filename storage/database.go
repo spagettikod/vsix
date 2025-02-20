@@ -197,6 +197,15 @@ func (db Database) Run(q marketplace.Query) (vscode.Results, error) {
 				}
 			}
 		}
+
+		searchValues = q.CriteriaValues(marketplace.FilterTypeExtensionID)
+		if len(searchValues) > 0 {
+			for _, e := range db.List() {
+				if slices.Contains(searchValues, e.ID) {
+					extensions = append(extensions, e)
+				}
+			}
+		}
 	}
 
 	// set total count to all extensions found, before some might be removed if paginated
