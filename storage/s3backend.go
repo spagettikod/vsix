@@ -1,0 +1,250 @@
+package storage
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"net/url"
+	"path/filepath"
+	"strings"
+
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/spagettikod/vsix/vscode"
+)
+
+type S3Config struct {
+	Endpoint        string
+	Bucket          string
+	CredentialsFile string
+	Profile         string
+	useSSL          bool
+}
+
+func NewS3Config(urlStr, bucket, credentialsFile, profile string) (S3Config, error) {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return S3Config{}, err
+	}
+	return S3Config{
+		Endpoint:        u.Host,
+		Bucket:          bucket,
+		CredentialsFile: credentialsFile,
+		Profile:         profile,
+		useSSL:          u.Scheme == "https:",
+	}, nil
+}
+
+type S3Backend struct {
+	BaseBackend
+	c   *minio.Client
+	bkt string
+}
+
+func NewS3Backend(cfg S3Config) (Backend, error) {
+	c, err := minio.New(cfg.Endpoint, &minio.Options{
+		Creds:  credentials.NewFileAWSCredentials(cfg.CredentialsFile, cfg.Profile),
+		Secure: cfg.useSSL,
+	})
+	if err != nil {
+		return nil, err
+	}
+	s3 := &S3Backend{
+		c:   c,
+		bkt: cfg.Bucket,
+	}
+	s3.BaseBackend = BaseBackend{impl: s3}
+	return s3, nil
+}
+
+func (s3 S3Backend) ListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tags := map[string]vscode.VersionTag{}
+
+	var s3err error
+	prefix := ExtensionPath(uid) + "/"
+	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if obj.Err != nil {
+			s3err = obj.Err
+			slog.Error("list version tag error", "error", s3err, "uid", uid.String())
+			continue
+		}
+		keySplit := strings.Split(obj.Key, "/")
+		if len(keySplit) < 4 {
+			continue
+		}
+		t := vscode.VersionTag{
+			UniqueID:       uid,
+			Version:        keySplit[2],
+			TargetPlatform: keySplit[3],
+		}
+		slog.Debug("tag", "stringValue", t.String(), "key", obj.Key, "prefix", prefix)
+		tags[t.String()] = t
+	}
+	tagarr := []vscode.VersionTag{}
+	for _, v := range tags {
+		tagarr = append(tagarr, v)
+	}
+	return tagarr, s3err
+}
+
+func (s3 S3Backend) LoadExtensionMetadata(uid vscode.UniqueID) ([]byte, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(ExtensionPath(uid), extensionMetadataFilename), minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer obj.Close()
+
+	return io.ReadAll(obj)
+}
+
+func (s3 S3Backend) LoadVersionMetadata(tag vscode.VersionTag) ([]byte, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return io.ReadAll(obj)
+}
+
+func (s3 S3Backend) SaveExtensionMetadata(ext vscode.Extension) error {
+	ext.Versions = []vscode.Version{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	jext := ext.ToJSON()
+	objectName := filepath.Join(ExtensionPath(ext.UniqueID()), extensionMetadataFilename)
+
+	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(jext), int64(len(jext)), minio.PutObjectOptions{
+		ContentType: "application/json",
+	})
+
+	return err
+}
+
+func (s3 S3Backend) SaveVersionMetadata(uid vscode.UniqueID, v vscode.Version) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	tag := v.Tag(uid)
+
+	jv := v.ToJSON()
+	objectName := filepath.Join(AssetPath(tag), versionMetadataFilename)
+
+	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(jv), int64(len(jv)), minio.PutObjectOptions{
+		ContentType: "application/json",
+	})
+
+	return err
+}
+
+func (s3 S3Backend) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, contentType string, data []byte) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objectName := filepath.Join(AssetPath(tag), string(atype))
+
+	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+		ContentType: contentType,
+	})
+
+	return err
+}
+
+func (s3 S3Backend) Remove(tag vscode.VersionTag) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	objectName := s3.tagToKey(tag)
+	if err := s3.c.RemoveObject(ctx, s3.bkt, objectName, minio.RemoveObjectOptions{ForceDelete: true}); err != nil {
+		return err
+	}
+
+	tags, err := s3.ListVersionTags(tag.UniqueID)
+	if err != nil {
+		return err
+	}
+	if len(tags) == 0 {
+		objectName := s3.uidToKey(tag.UniqueID)
+		if err := s3.c.RemoveObject(ctx, s3.bkt, objectName, minio.RemoveObjectOptions{ForceDelete: true}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s3 S3Backend) LoadAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey) (io.ReadCloser, error) {
+	return s3.c.GetObject(context.Background(), s3.bkt, filepath.Join(AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
+}
+
+func (s3 S3Backend) listPublishers() ([]string, error) {
+	publishers := []string{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var s3err error
+	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Recursive: false}) {
+		if obj.Err != nil {
+			s3err = obj.Err
+		} else {
+			slog.Debug("publisher found", "publisher", filepath.Base(obj.Key))
+			publishers = append(publishers, filepath.Base(obj.Key))
+		}
+	}
+	return publishers, s3err
+}
+
+func (s3 S3Backend) listUniqueID() ([]vscode.UniqueID, error) {
+	publishers, err := s3.listPublishers()
+	if err != nil {
+		return nil, err
+	}
+
+	uids := map[string]vscode.UniqueID{}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var s3err error
+	for _, publisher := range publishers {
+		for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: publisher + "/", Recursive: false}) {
+			slog.Debug("extension name found", "key", obj.Key, "publisher", publisher, "path", obj.Key)
+			spl := strings.Split(obj.Key, "/")
+			if len(spl) > 2 {
+				uid := vscode.UniqueID{Publisher: publisher, Name: filepath.Base(obj.Key)}
+				uids[uid.String()] = uid
+			}
+			if obj.Err != nil {
+				s3err = obj.Err
+			}
+		}
+	}
+	uidarr := []vscode.UniqueID{}
+	for _, v := range uids {
+		uidarr = append(uidarr, v)
+	}
+	return uidarr, s3err
+}
+
+func (s3 S3Backend) uidToKey(uid vscode.UniqueID) string {
+	return fmt.Sprintf("%s/%s", uid.Publisher, uid.Name)
+}
+
+func (s3 S3Backend) tagToKey(tag vscode.VersionTag) string {
+	s := s3.uidToKey(tag.UniqueID)
+	if tag.HasVersion() {
+		s = fmt.Sprintf("%s/%s", s, tag.Version)
+		if tag.HasTargetPlatform() {
+			s = fmt.Sprintf("%s/%s", s, tag.TargetPlatform)
+		}
+	}
+	return s
+}

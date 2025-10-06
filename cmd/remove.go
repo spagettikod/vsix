@@ -5,13 +5,11 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	removeCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	removeCmd.Flags().BoolVarP(&force, "force", "f", false, "don't prompt for confirmation before deleting")
 	rootCmd.AddCommand(removeCmd)
 }
@@ -49,13 +47,13 @@ Some examples:
    1.24.1 for extension "ms-vscode.cpptools".
 `,
 	Example: `  Remove Java extension, all versions will be removed:
-    $ vsix remove --data extensions redhat.java
+    $ vsix remove redhat.java
 
   Remove all pre-release versions for all extension:
-    $ vsix remove --data extensions $(vsix list --data extensions --pre-release --all --quiet)
+    $ vsix remove $(vsix list --pre-release --all --quiet)
 
   Remove all versions for platform win32-arm64:
-    $ vsix remove --data extensions $(vsix list --data extensions --platforms win32-arm64 --all --quiet)
+    $ vsix remove $(vsix list --platforms win32-arm64 --all --quiet)
 `,
 	Args:                  cobra.MinimumNArgs(1),
 	DisableFlagsInUseLine: true,
@@ -72,26 +70,40 @@ Some examples:
 			tags = append(tags, tag)
 		}
 
+		// TODO this should look in cache for what will be deleted, don't show a prompt unless we find something
 		if !force && len(tags) > 0 {
+			totalCacheHits := 0
 			for _, tag := range tags {
-				fmt.Println(tag.String())
+				cacheTags, err := cache.ListVersionTags(tag)
+				if err != nil {
+					slog.Error("error looking up tags in cache, exiting", "error", err, argGrp)
+					os.Exit(1)
+				}
+				for _, cacheTags := range cacheTags {
+					fmt.Println(cacheTags.String())
+				}
+				totalCacheHits += len(cacheTags)
 			}
-			fmt.Println("-----")
-			if !confirm(len(tags)) {
+			if totalCacheHits == 0 {
+				fmt.Println("No matches found, nothing to remove")
+				os.Exit(0)
+			}
+			fmt.Println("--------------------------------------------------------------------")
+			if !confirm(totalCacheHits) {
 				os.Exit(0)
 			}
 		}
-		db, _, err := storage.Open(dbPath)
-		if err != nil {
-			slog.Error("failed open database, exiting", "error", err, argGrp)
-			os.Exit(1)
-		}
+
 		for _, tag := range tags {
 			if force { // force prints removed tags
 				fmt.Println(tag)
 			}
-			if err := db.Remove(tag); err != nil {
-				slog.Error("remove failed, exiting", "error", err, argGrp)
+			if err := backend.Remove(tag); err != nil {
+				slog.Error("failed to remove from backend", "error", err, argGrp)
+				os.Exit(1)
+			}
+			if err := cache.Delete(tag); err != nil {
+				slog.Error("failed to remove from cache", "error", err, argGrp)
 				os.Exit(1)
 			}
 		}

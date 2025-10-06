@@ -123,6 +123,14 @@ func (e Extension) String() string {
 	return string(b)
 }
 
+func (e Extension) ToJSON() []byte {
+	b, err := json.Marshal(e)
+	if err != nil {
+		return []byte("! JSON UNMARSHAL FAILED !")
+	}
+	return b
+}
+
 // LatestVersion returns the latest version number for the extension with the given unique ID.
 func (e Extension) LatestVersion(preRelease bool) string {
 	if len(e.Versions) == 0 {

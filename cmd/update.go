@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"time"
@@ -11,7 +12,6 @@ import (
 )
 
 func init() {
-	updateCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "update should fetch pre-release versions")
 	rootCmd.AddCommand(updateCmd)
 }
@@ -39,25 +39,22 @@ is marked as pre-release the command will traverse the list of versions until it
 finds the latest version not marked as pre-release. To enable downloading an extension
 and selecting the latest version, regardless if marked as pre-release, use the
 pre-release-flag.`,
-	Example:               `  $ vsix update --data extensions `,
+	Example:               `  $ vsix update`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
-		argGrp := slog.Group("args", "cmd", "update", "path", dbPath, "preRelease", preRelease)
-
-		db, verrs, err := storage.Open(dbPath)
-		if err != nil {
-			slog.Error("could not open database, exiting", "error", err, argGrp)
-			os.Exit(1)
-		}
-		printValidationErrors(verrs)
+		argGrp := slog.Group("args", "cmd", "update", "preRelease", preRelease)
 
 		extensionsToUpdate := []marketplace.ExtensionRequest{}
 		if len(args) > 0 {
 			for _, uid := range argsToUniqueIDOrExit(args) {
-				ext, found := db.FindByUniqueID(uid)
-				if !found {
-					slog.Error("could not find extension with given unique id, add it before updating", argGrp)
+				ext, err := cache.FindByUniqueID(uid)
+				if err != nil {
+					if errors.Is(err, storage.ErrCacheNotFound) {
+						slog.Error("could not find extension with given unique id, add it before updating", argGrp)
+					} else {
+						slog.Error("error occured while looking up extension in cache", "error", err, argGrp)
+					}
 					os.Exit(1)
 				}
 				er := marketplace.ExtensionRequest{
@@ -68,7 +65,12 @@ pre-release-flag.`,
 				extensionsToUpdate = append(extensionsToUpdate, er)
 			}
 		} else {
-			for _, ext := range db.List() {
+			exts, err := cache.List()
+			if err != nil {
+				slog.Error("error listing extensions from cache", "error", err, argGrp)
+				os.Exit(1)
+			}
+			for _, ext := range exts {
 				er := marketplace.ExtensionRequest{
 					UniqueID:        ext.UniqueID(),
 					TargetPlatforms: ext.Platforms(),
@@ -83,6 +85,6 @@ pre-release-flag.`,
 			os.Exit(1)
 		}
 
-		CommonFetchAndSave(db, extensionsToUpdate, start, argGrp)
+		CommonFetchAndSave(extensionsToUpdate, start, argGrp)
 	},
 }

@@ -9,13 +9,16 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
 
+var (
+	all      bool
+	installs bool
+)
+
 func init() {
-	listCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	listCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list to limit the results to the given platforms")
 	listCmd.Flags().BoolVar(&preRelease, "pre-release", false, "limit result to only pre-release versions")
 	listCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "only print unique identifier")
@@ -64,13 +67,13 @@ Some examples:
    Tag with version and platform, this tag will remove platform "win32-arm64" in version
    1.24.1 for extension "ms-vscode.cpptools`,
 	Example: `  List all extension versions where unique identifier starts with "redhat":
-    $ vsix list --data extensions redhat
+    $ vsix list redhat
 
   List all versions matching platforms linux-x64 and web:
-    $ vsix list --data extensions --platforms linux-x64,web
+    $ vsix list --platforms linux-x64,web
 
   Combine commands and remove all pre-release versions:
-    $ vsix remove --data extensions $(vsix list --data extensions --pre-release --all --quiet)
+    $ vsix remove $(vsix list --pre-release --all --quiet)
 `,
 	Args:                  cobra.MaximumNArgs(1),
 	DisableFlagsInUseLine: true,
@@ -79,16 +82,15 @@ Some examples:
 		if len(args) > 0 {
 			query = args[0]
 		}
-		argGrp := slog.Group("args", "cmd", "list", "data", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms, "prefix", query)
+		argGrp := slog.Group("args", "cmd", "list", "preRelease", preRelease, "targetPlatforms", targetPlatforms, "prefix", query)
 		start := time.Now()
-		db, verrs, err := storage.Open(dbPath)
+
+		exts, err := cache.List()
 		if err != nil {
-			slog.Error("could not open database, exiting", "error", err, argGrp)
+			slog.Error("error listing exstensions from cache, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
-		printValidationErrors(verrs)
-
-		fexts := filterExtensions(db.List(), targetPlatforms, preRelease, query)
+		fexts := filterExtensions(exts, targetPlatforms, preRelease, query)
 		if installs {
 			slices.SortFunc(fexts, vscode.SortFuncExtensionByInstallCount)
 		}

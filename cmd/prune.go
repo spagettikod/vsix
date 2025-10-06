@@ -15,8 +15,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	removeEmpty bool
+	dry         bool
+	keep        int
+)
+
 func init() {
-	pruneCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	pruneCmd.Flags().IntVar(&keep, "keep", 0, "number of versions to keep, 0 keeps all (default 0)")
 	pruneCmd.Flags().BoolVar(&dry, "dry-run", false, "execute command without actually removing anything")
 	pruneCmd.Flags().BoolVar(&removeEmpty, "remove-empty", false, "remove extensions without any versions")
@@ -39,21 +44,27 @@ Pruning versions
 Adding the --keep-versions X flag will keep the X latest versions and remove the rest.
 `,
 	Example: `  Keep the latest two versions and remove the rest:
-    $ vsix prune --data extensions --keep-versions 2
+    $ vsix prune --keep-versions 2
 `,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
-		argGrp := slog.Group("args", "cmd", "prune", "path", dbPath, "preRelease", preRelease, "targetPlatforms", targetPlatforms)
+		argGrp := slog.Group("args", "cmd", "prune", "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
-		db, results, err := storage.Open(dbPath)
-		if err != nil {
-			slog.Error("failed open database, exiting", "error", err, argGrp)
-			os.Exit(1)
-		}
+		// db, results, err := storage.Open(dbPath)
+		// if err != nil {
+		// 	slog.Error("failed open database, exiting", "error", err, argGrp)
+		// 	os.Exit(1)
+		// }
 
+		results := []storage.ValidationError{}
 		if keep > 0 {
-			for _, ext := range db.List() {
+			exts, err := cache.List()
+			if err != nil {
+				slog.Error("error reading cache, exiting", "error", err, argGrp)
+				os.Exit(1)
+			}
+			for _, ext := range exts {
 				// reduce to keep only the version numbers, we'll prune versions regardless of platform
 				reducedVersions := slices.CompactFunc(ext.Versions, func(v1, v2 vscode.Version) bool {
 					return v1.Version == v2.Version
@@ -92,10 +103,11 @@ Adding the --keep-versions X flag will keep the X latest versions and remove the
 					if force { // force prints removed tags
 						fmt.Println(result.Tag)
 					}
-					if err := db.Remove(result.Tag); err != nil {
-						slog.Error("remove failed, exiting", "error", err, argGrp)
-						os.Exit(1)
-					}
+					// TODO implement if to be used
+					// if err := db.Remove(result.Tag); err != nil {
+					// 	slog.Error("remove failed, exiting", "error", err, argGrp)
+					// 	os.Exit(1)
+					// }
 				}
 			}
 		}
@@ -133,7 +145,7 @@ func printValidationErrorsTable(verrs []storage.ValidationError) {
 func confirm(items int) bool {
 	reader := bufio.NewReader(os.Stdin)
 
-	fmt.Printf("Listed %v items will be removed, are you sure you want to continue? (y/N): ", items)
+	fmt.Printf("These %v versions will be removed, are you sure you want to continue? (y/N): ", items)
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input) // Remove any trailing newline characters
 

@@ -11,6 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	limit      int
+	sortByFlag string
+	nolimit    bool
+)
+
 func init() {
 	searchCmd.Flags().IntVarP(&limit, "limit", "l", 20, "limit number of results")
 	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install, rating, date")

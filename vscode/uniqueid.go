@@ -1,6 +1,8 @@
 package vscode
 
-import "strings"
+import (
+	"strings"
+)
 
 type UniqueID struct {
 	Publisher string

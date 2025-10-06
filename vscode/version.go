@@ -60,6 +60,14 @@ func (v Version) String() string {
 	return string(b)
 }
 
+func (v Version) ToJSON() []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return []byte("! JSON UNMARSHAL FAILED !")
+	}
+	return b
+}
+
 func (v Version) TargetPlatform() string {
 	if v.RawTargetPlatform == "" {
 		return PlatformUniversal
