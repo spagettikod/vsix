@@ -58,7 +58,7 @@ func (b FSBackend) ListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, er
 			TargetPlatform: split[1],
 		}
 		vts = append(vts, vt)
-		slog.Debug("tag", "stringValue", vt.String(), "path", filepath.Join(b.root, ExtensionPath(uid), m))
+		slog.Debug("found version", "stringValue", vt.String(), "path", filepath.Join(b.root, ExtensionPath(uid), m))
 	}
 	return vts, nil
 }
@@ -110,6 +110,24 @@ func (b FSBackend) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, c
 	return afero.WriteFile(b.fs, fpath, data, os.ModePerm)
 }
 
+func (b FSBackend) isDirectoryEmpty(path string) (bool, error) {
+	// Open the directory
+	dir, err := b.fs.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer dir.Close()
+
+	// Read the directory contents
+	entries, err := dir.Readdir(-1)
+	if err != nil {
+		return false, err
+	}
+
+	// Check if the directory is empty
+	return len(entries) == 0, nil
+}
+
 func (b FSBackend) Remove(tag vscode.VersionTag) error {
 	p := AssetPath(tag)
 	if tag.HasVersion() {
@@ -119,34 +137,39 @@ func (b FSBackend) Remove(tag vscode.VersionTag) error {
 	}
 
 	slog.Debug("removing", "tag", tag.String(), "path", p)
-	// if err := b.fs.RemoveAll(p); err != nil {
-	// 	return err
-	// }
+	if err := b.fs.RemoveAll(p); err != nil {
+		return err
+	}
 
-	// // are there any versions left?
+	// are there any versions left? if no remove the extension
 	tags, err := b.ListVersionTags(tag.UniqueID)
 	if err != nil {
 		return err
 	}
-	fmt.Println(filepath.Dir(p), tags)
 	if len(tags) == 0 {
-		slog.Debug("no version left, removing extension", "tag", tag.String(), "path", p)
-		// 	return b.fs.RemoveAll(p)
+		extensionDir := ExtensionPath(tag.UniqueID)
+		slog.Debug("no version left, removing extension folder", "tag", tag.String(), "path", extensionDir)
+		if err := b.fs.RemoveAll(extensionDir); err != nil {
+			return err
+		}
+	} else {
+		slog.Debug("there are still versions left, remove finished")
+		return nil
 	}
-	// fmt.Println(len(tags))
-	return nil
-	return b.fs.RemoveAll(p)
-	// return b.fs.RemoveAll(p)
-	// parentDir := filepath.Dir(p)
-	// filesInParent, err := afero.Glob(b.fs, parentDir+"/*")
-	// if err != nil {
-	// 	return err
-	// }
-	// fmt.Println(len(filesInParent))
-	// if len(filesInParent) == 0 {
-	// 	slog.Debug("no files left in parent, removing parent", "parent", parentDir)
-	// 	return b.fs.RemoveAll(filepath.Dir(p))
-	// }
+
+	// are there and extensions left for this publisher? if no, remove the publisher folder
+	empty, err := b.isDirectoryEmpty(tag.UniqueID.Publisher)
+	if err != nil {
+		return err
+	}
+	if empty {
+		slog.Debug("no extensions left, removing publisher folder", "tag", tag.String(), "path", tag.UniqueID.Publisher)
+		if err := b.fs.RemoveAll(tag.UniqueID.Publisher); err != nil {
+			return err
+		}
+	} else {
+		slog.Debug("there are still extensions left, remove finished")
+	}
 	return nil
 }
 

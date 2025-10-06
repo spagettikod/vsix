@@ -70,31 +70,31 @@ Some examples:
 			tags = append(tags, tag)
 		}
 
-		// TODO this should look in cache for what will be deleted, don't show a prompt unless we find something
-		if !force && len(tags) > 0 {
-			totalCacheHits := 0
-			for _, tag := range tags {
-				cacheTags, err := cache.ListVersionTags(tag)
-				if err != nil {
-					slog.Error("error looking up tags in cache, exiting", "error", err, argGrp)
-					os.Exit(1)
-				}
-				for _, cacheTags := range cacheTags {
-					fmt.Println(cacheTags.String())
-				}
-				totalCacheHits += len(cacheTags)
+		cacheTags := []vscode.VersionTag{}
+		for _, tag := range tags {
+			ts, err := cache.ListVersionTags(tag)
+			if err != nil {
+				slog.Error("error looking up tags in cache, exiting", "error", err, argGrp)
+				os.Exit(1)
 			}
-			if totalCacheHits == 0 {
-				fmt.Println("No matches found, nothing to remove")
-				os.Exit(0)
+			cacheTags = append(cacheTags, ts...)
+		}
+		if len(cacheTags) == 0 {
+			fmt.Println("No matches found, nothing to remove")
+			os.Exit(0)
+		}
+
+		if !force && len(cacheTags) > 0 {
+			for _, tag := range cacheTags {
+				fmt.Println(tag.String())
 			}
 			fmt.Println("--------------------------------------------------------------------")
-			if !confirm(totalCacheHits) {
+			if !confirm(len(cacheTags)) {
 				os.Exit(0)
 			}
 		}
 
-		for _, tag := range tags {
+		for _, tag := range cacheTags {
 			if force { // force prints removed tags
 				fmt.Println(tag)
 			}
