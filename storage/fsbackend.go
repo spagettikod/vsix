@@ -136,7 +136,7 @@ func (b FSBackend) Remove(tag vscode.VersionTag) error {
 		}
 	}
 
-	slog.Debug("removing", "tag", tag.String(), "path", p)
+	slog.Debug("removing", "path", filepath.Join(b.root, p), "tag", tag.String())
 	if err := b.fs.RemoveAll(p); err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func (b FSBackend) Remove(tag vscode.VersionTag) error {
 	}
 	if len(tags) == 0 {
 		extensionDir := ExtensionPath(tag.UniqueID)
-		slog.Debug("no version left, removing extension folder", "tag", tag.String(), "path", extensionDir)
+		slog.Debug("no version left, removing extension folder", "path", filepath.Join(b.root, extensionDir), "tag", tag.String())
 		if err := b.fs.RemoveAll(extensionDir); err != nil {
 			return err
 		}
@@ -163,7 +163,7 @@ func (b FSBackend) Remove(tag vscode.VersionTag) error {
 		return err
 	}
 	if empty {
-		slog.Debug("no extensions left, removing publisher folder", "tag", tag.String(), "path", tag.UniqueID.Publisher)
+		slog.Debug("no extensions left, removing publisher folder", "path", filepath.Join(b.root, tag.UniqueID.Publisher), "tag", tag.String())
 		if err := b.fs.RemoveAll(tag.UniqueID.Publisher); err != nil {
 			return err
 		}
