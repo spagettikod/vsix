@@ -1,4 +1,4 @@
-VERSION=4.0.1
+VERSION=5.0.0-beta
 OUTPUT=_pkg
 PWD=$(shell pwd)
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
@@ -13,10 +13,10 @@ clean:					## Clean build artifacts
 	@rm -rf $(OUTPUT)
 
 build_linux: setup		## Build Linux executable for amd64
-	@env GOOS=linux GOARCH=amd64 go build -o $(OUTPUT) -ldflags "-X main.version=$(VERSION)" vsix.go
+	@env GOOS=linux GOARCH=amd64 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
 
 build_macos: setup		## Build macOS executable for arm64
-	@env GOOS=darwin GOARCH=arm64 go build -o $(OUTPUT) -ldflags "-X main.version=$(VERSION)" vsix.go
+	@env GOOS=darwin GOARCH=arm64 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
 
 down:				## Shut down services used for development
 	@-docker stop minio
@@ -24,7 +24,8 @@ down:				## Shut down services used for development
 	@-docker network rm vsixminionet
 
 pkg_docker:				## Build and push Docker container for arm64 and amd64
-	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
+# 	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
+	@docker buildx build --no-cache --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
 
 pkg_linux: build_linux	## Build and package Linux executable for amd64
 	@tar -C $(OUTPUT) -czf $(OUTPUT)/vsix$(VERSION).linux-amd64.tar.gz vsix

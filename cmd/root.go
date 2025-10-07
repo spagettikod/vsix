@@ -60,22 +60,10 @@ func init() {
 	viper.SetConfigName(configFilename)
 	viper.SetConfigType("env")
 
-	// setup configuration paths
-	// if err == nil {
-	// 	dataDir = filepath.Join(dataDir, "vsix")
-	// 	extDir := filepath.Join(dataDir, storage.FSBackendDir)
-	// 	if err := os.MkdirAll(extDir, 0750); err != nil {
-	// 		if !os.IsExist(err) {
-	// 			log.Fatalln(err)
-	// 		}
-	// 	}
-	// } else {
-	// 	log.Fatalln(err)
-	// }
 	configDir, err := os.UserConfigDir()
 	if err == nil {
 		configDir = filepath.Join(configDir, "vsix")
-		if err := os.Mkdir(configDir, 0750); err != nil {
+		if err := os.MkdirAll(configDir, 0750); err != nil {
 			if !os.IsExist(err) {
 				log.Fatalln(err)
 			}
