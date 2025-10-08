@@ -49,15 +49,20 @@ var infoCmd = &cobra.Command{
 		fmt.Print("The * means the value has been modifed from the default value.\n\n")
 		for _, key := range sortDefaultKeys() {
 			changed := false
+			var value any
 			switch key {
 			case "VSIX_PLATFORMS":
 				changed = len(viper.GetStringSlice(key)) != 0
+				value = viper.GetStringSlice(key)
 			case "VSIX_LOG_DEBUG":
 				changed = viper.GetBool(key) != defaults[key]
+				value = viper.GetBool(key)
 			case "VSIX_LOG_VERBOSE":
 				changed = viper.GetBool(key) != defaults[key]
+				value = viper.GetBool(key)
 			default:
 				changed = viper.GetString(key) != defaults[key]
+				value = viper.Get(key)
 			}
 			if changed {
 				fmt.Print("* ")
@@ -65,7 +70,7 @@ var infoCmd = &cobra.Command{
 				fmt.Print("  ")
 			}
 
-			fmt.Println(key, spaces(key), viper.Get(key))
+			fmt.Println(key, spaces(key), value)
 		}
 		fmt.Println("")
 
