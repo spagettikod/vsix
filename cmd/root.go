@@ -101,6 +101,11 @@ func init() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	if err := os.MkdirAll(filepath.Join(dataDir, "vsix"), 0750); err != nil {
+		if !os.IsExist(err) {
+			log.Fatalln(err)
+		}
+	}
 	defaults["VSIX_CACHE_FILE"] = filepath.Join(dataDir, "vsix", storage.CacheFilename)
 	defaults["VSIX_FS_DIR"] = filepath.Join(dataDir, "vsix", storage.FSBackendDir)
 	// set defaults from the default map

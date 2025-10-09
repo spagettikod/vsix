@@ -143,7 +143,7 @@ func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start ti
 				extAsset++
 				bar.Describe(v.Tag(res.UniqueID).String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
 				aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
-				if err := FetchAndSaveAsset(v.Tag(res.UniqueID), a); err != nil {
+				if err := FetchAndSaveAsset(v.Tag(res.UniqueID), v, a); err != nil {
 					slog.Error("error saving asset, continuing with next asset", "error", err, aGrp, argGrp)
 					continue
 				}
@@ -207,8 +207,8 @@ func FetchAndSaveMetadata(request marketplace.ExtensionRequest) (RequestResult, 
 	return res, nil
 }
 
-func FetchAndSaveAsset(tag vscode.VersionTag, asset vscode.Asset) error {
-	resp, err := http.Get(asset.Source)
+func FetchAndSaveAsset(tag vscode.VersionTag, v vscode.Version, asset vscode.Asset) error {
+	resp, err := http.Get(asset.URI(v))
 	if err != nil {
 		return err
 	}
@@ -227,7 +227,7 @@ func FetchAndSaveAsset(tag vscode.VersionTag, asset vscode.Asset) error {
 	if strings.Index(ct, ";") > 0 {
 		ct = ct[:strings.Index(ct, ";")]
 	}
-	slog.Debug("saving asset", "url", asset.Source, "contentType", ct, "size", len(data))
+	slog.Debug("saving asset", "tag", tag.String(), "url", asset.URI(v), "contentType", ct, "size", len(data))
 	return backend.SaveAsset(tag, asset.Type, ct, data)
 }
 

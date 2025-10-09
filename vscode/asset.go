@@ -48,3 +48,9 @@ type Asset struct {
 	Source string       `json:"source"`
 	Path   string       `json:"-"`
 }
+
+// URI return the correct asset source. The one supplied in the JSON response
+// lacks platform information.
+func (a Asset) URI(v Version) string {
+	return fmt.Sprintf("%s/%s?targetPlatform=%s", v.AssetURI, a.Type, v.TargetPlatform())
+}

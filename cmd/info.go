@@ -32,7 +32,7 @@ var infoCmd = &cobra.Command{
 		}
 		// about the configuration file
 		fmt.Println("General")
-		fmt.Println("------------------")
+		fmt.Println("-------")
 		fmt.Println("  Version:        ", rootCmd.Version)
 		fmt.Println("  Config paths:   ", filepath.Join(configPaths[0], configFilename))
 		fmt.Println("                  ", filepath.Join(wd, configFilename))
