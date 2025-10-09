@@ -75,6 +75,7 @@ func (v Version) TargetPlatform() string {
 	return v.RawTargetPlatform
 }
 
+// Tag returns a complete version tag for this version.
 func (v Version) Tag(uid UniqueID) VersionTag {
 	return VersionTag{UniqueID: uid, Version: v.Version, PreRelease: v.IsPreRelease(), TargetPlatform: v.TargetPlatform()}
 }

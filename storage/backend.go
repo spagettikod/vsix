@@ -71,6 +71,11 @@ func ExtensionPath(uid vscode.UniqueID) string {
 	return filepath.Join(uid.Publisher, uid.Name)
 }
 
+// AssetPath returns the asset path for a given ExtensionTag. For example: redhat/java/1.23.3.
+func VersionPath(tag vscode.VersionTag) string {
+	return filepath.Join(ExtensionPath(tag.UniqueID), tag.Version)
+}
+
 // AssetPath returns the asset path for a given ExtensionTag. For example: redhat/java/1.23.3/darwin-arm64.
 func AssetPath(tag vscode.VersionTag) string {
 	return filepath.Join(ExtensionPath(tag.UniqueID), tag.Version, tag.TargetPlatform)

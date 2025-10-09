@@ -142,10 +142,18 @@ func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start ti
 			for _, a := range v.Files {
 				extAsset++
 				bar.Describe(v.Tag(res.UniqueID).String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
-				aGrp := slog.Group("asset", "type", a.Type, "url", a.Source)
+				aGrp := slog.Group("asset", "type", a.Type, "url", a.URI(v))
 				if err := FetchAndSaveAsset(v.Tag(res.UniqueID), v, a); err != nil {
-					slog.Error("error saving asset, continuing with next asset", "error", err, aGrp, argGrp)
-					continue
+					slog.Error("error saving asset, cleaning up this version and continuing with next version", "error", err, aGrp, argGrp)
+					if err := backend.Remove(v.Tag(er.UniqueID)); err != nil {
+						slog.Error("failed to remove from backend", "error", err, argGrp)
+						os.Exit(1)
+					}
+					if err := cache.Delete(v.Tag(er.UniqueID)); err != nil {
+						slog.Error("failed to remove from cache", "error", err, argGrp)
+						os.Exit(1)
+					}
+					break
 				}
 				assets++
 			}

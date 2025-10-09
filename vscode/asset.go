@@ -52,5 +52,8 @@ type Asset struct {
 // URI return the correct asset source. The one supplied in the JSON response
 // lacks platform information.
 func (a Asset) URI(v Version) string {
+	if v.TargetPlatform() == PlatformUniversal {
+		return fmt.Sprintf("%s/%s", v.AssetURI, a.Type)
+	}
 	return fmt.Sprintf("%s/%s?targetPlatform=%s", v.AssetURI, a.Type, v.TargetPlatform())
 }

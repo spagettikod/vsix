@@ -141,7 +141,22 @@ func (b FSBackend) Remove(tag vscode.VersionTag) error {
 		return err
 	}
 
-	// are there any versions left? if no remove the extension
+	// remove the version path if there are no more platform versions
+	empty, err := b.isDirectoryEmpty(VersionPath(tag))
+	if err != nil {
+		return err
+	}
+	if empty {
+		slog.Debug("no platforms left, removing version folder", "path", filepath.Join(b.root, VersionPath(tag)), "tag", tag.String())
+		if err := b.fs.RemoveAll(VersionPath(tag)); err != nil {
+			return err
+		}
+	} else {
+		slog.Debug("there are still platforms left, remove finished")
+		return nil
+	}
+
+	// remove extension folder if there are no versions left
 	tags, err := b.ListVersionTags(tag.UniqueID)
 	if err != nil {
 		return err
@@ -157,8 +172,8 @@ func (b FSBackend) Remove(tag vscode.VersionTag) error {
 		return nil
 	}
 
-	// are there and extensions left for this publisher? if no, remove the publisher folder
-	empty, err := b.isDirectoryEmpty(tag.UniqueID.Publisher)
+	// remove publisher folder if there are no more extensions for this publisher
+	empty, err = b.isDirectoryEmpty(tag.UniqueID.Publisher)
 	if err != nil {
 		return err
 	}
