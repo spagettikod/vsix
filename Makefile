@@ -1,5 +1,7 @@
 VERSION=5.0.0-beta
 OUTPUT=_pkg
+OUTPUT_LINUX=$(OUTPUT)/linux
+OUTPUT_MACOS=$(OUTPUT)/macos
 PWD=$(shell pwd)
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
 
@@ -12,29 +14,24 @@ help:
 clean:					## Clean build artifacts
 	@rm -rf $(OUTPUT)
 
-build_linux: setup		## Build Linux executable for amd64
-	@env GOOS=linux GOARCH=amd64 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
+build: setup			## Build vsix for current platform
+	@CGO_ENABLED=1 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
 
-build_macos: setup		## Build macOS executable for arm64
-	@env GOOS=darwin GOARCH=arm64 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
+docker:					## Build and push Docker container for arm64 and amd64
+	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
 
-down:				## Shut down services used for development
+down:					## Shut down services used for development
 	@-docker stop minio
 	@-docker rm minio
 	@-docker network rm vsixminionet
 
-pkg_docker:				## Build and push Docker container for arm64 and amd64
-# 	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
-	@docker buildx build --no-cache --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
-
-pkg_linux: build_linux	## Build and package Linux executable for amd64
-	@tar -C $(OUTPUT) -czf $(OUTPUT)/vsix$(VERSION).linux-amd64.tar.gz vsix
-
-pkg_macos: build_macos	## Build and package macOS executable for arm64
-	@tar -C $(OUTPUT) -czf $(OUTPUT)/vsix$(VERSION).macos-arm64.tar.gz vsix
+package: build			## Build and package Linux (amd64) and MacOS executables
+	@tar -C $(OUTPUT_LINUX) -czf $(OUTPUT)/vsix$(VERSION).linux-amd64.tar.gz vsix
+	@tar -C $(OUTPUT_MACOS) -czf $(OUTPUT)/vsix$(VERSION).macos-arm64.tar.gz vsix	
 
 setup:					## Setup and prepare for build
-	@mkdir -p $(OUTPUT)
+	@mkdir -p $(OUTPUT_LINUX)
+	@mkdir -p $(OUTPUT_MACOS)
 
 test:					## Run tests
 	@docker build --target test . && docker rmi `docker image ls --filter label=vsix_intermediate=true -q`

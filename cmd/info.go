@@ -34,8 +34,11 @@ var infoCmd = &cobra.Command{
 		fmt.Println("General")
 		fmt.Println("-------")
 		fmt.Println("  Version:        ", rootCmd.Version)
+		fmt.Println("  In container:   ", runtimeDocker())
 		fmt.Println("  Config paths:   ", filepath.Join(configPaths[0], configFilename))
-		fmt.Println("                  ", filepath.Join(wd, configFilename))
+		if !runtimeDocker() {
+			fmt.Println("                  ", filepath.Join(wd, configFilename))
+		}
 		filename := viper.ConfigFileUsed()
 		if filename == "" {
 			filename = "<no file found>"

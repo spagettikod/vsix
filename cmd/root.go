@@ -60,19 +60,23 @@ func init() {
 	viper.SetConfigName(configFilename)
 	viper.SetConfigType("env")
 
-	configDir, err := os.UserConfigDir()
-	if err == nil {
-		configDir = filepath.Join(configDir, "vsix")
-		if err := os.MkdirAll(configDir, 0750); err != nil {
-			if !os.IsExist(err) {
-				log.Fatalln(err)
-			}
-		}
-		configPaths = append(configPaths, configDir)
+	if runtimeDocker() {
+		configPaths = append(configPaths, "/config")
 	} else {
-		log.Fatalln(err)
+		configDir, err := os.UserConfigDir()
+		if err == nil {
+			configDir = filepath.Join(configDir, "vsix")
+			if err := os.MkdirAll(configDir, 0750); err != nil {
+				if !os.IsExist(err) {
+					log.Fatalln(err)
+				}
+			}
+			configPaths = append(configPaths, configDir)
+		} else {
+			log.Fatalln(err)
+		}
+		configPaths = append(configPaths, ".")
 	}
-	configPaths = append(configPaths, ".")
 	for _, v := range configPaths {
 		viper.AddConfigPath(v)
 	}
@@ -96,18 +100,23 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	// these defaults are caculated and are not hard coded in the map
-	dataDir, err := storage.UserDataDir()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	if err := os.MkdirAll(filepath.Join(dataDir, "vsix"), 0750); err != nil {
-		if !os.IsExist(err) {
+	if runtimeDocker() {
+		defaults["VSIX_CACHE_FILE"] = filepath.Join("cache", storage.CacheFilename)
+		defaults["VSIX_FS_DIR"] = "/data"
+	} else {
+		// these defaults are caculated and are not hard coded in the map
+		dataDir, err := storage.UserDataDir()
+		if err != nil {
 			log.Fatalln(err)
 		}
+		if err := os.MkdirAll(filepath.Join(dataDir, "vsix"), 0750); err != nil {
+			if !os.IsExist(err) {
+				log.Fatalln(err)
+			}
+		}
+		defaults["VSIX_CACHE_FILE"] = filepath.Join(dataDir, "vsix", storage.CacheFilename)
+		defaults["VSIX_FS_DIR"] = filepath.Join(dataDir, "vsix", storage.FSBackendDir)
 	}
-	defaults["VSIX_CACHE_FILE"] = filepath.Join(dataDir, "vsix", storage.CacheFilename)
-	defaults["VSIX_FS_DIR"] = filepath.Join(dataDir, "vsix", storage.FSBackendDir)
 	// set defaults from the default map
 	for k, v := range defaults {
 		viper.SetDefault(k, v)
@@ -195,4 +204,9 @@ func setupCache() error {
 		return fmt.Errorf("error opening cache: %w", err)
 	}
 	return nil
+}
+
+func runtimeDocker() bool {
+	_, err := os.Stat("/.dockerenv")
+	return err == nil
 }

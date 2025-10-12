@@ -8,7 +8,7 @@ ARG TARGETOS TARGETARCH
 RUN xx-apt-get install -y binutils gcc libc6-dev
 WORKDIR /vsix
 COPY ./ .
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=1 \
+RUN --mount=type=cache,target=/root/.cache/go-build GOOS=$TARGETOS GOARCH=$TARGETARCH CGO_ENABLED=1 \
     xx-go build -tags fts5 -ldflags="-extldflags=-static -linkmode external -X main.version=$VERSION" -o vsix .
 
 FROM scratch AS package
