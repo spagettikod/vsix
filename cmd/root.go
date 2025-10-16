@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	verbose bool
-	debug   bool
-	backend storage.Backend
-	cache   storage.Cache
+	verbose   bool
+	debug     bool
+	backend   storage.Backend
+	cache     storage.Cache
+	buildDate string
 
 	// used by sub-commands
 	targetPlatforms []string // used by sub-commands
@@ -123,7 +124,8 @@ func init() {
 	}
 }
 
-func Execute(version string) {
+func Execute(version, bdate string) {
+	buildDate = bdate
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate(`{{printf "%s" .Version}}
 `)

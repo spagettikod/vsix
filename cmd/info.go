@@ -34,6 +34,7 @@ var infoCmd = &cobra.Command{
 		fmt.Println("General")
 		fmt.Println("-------")
 		fmt.Println("  Version:        ", rootCmd.Version)
+		fmt.Println("  Build:          ", buildDate)
 		fmt.Println("  In container:   ", runtimeDocker())
 		fmt.Println("  Config paths:   ", filepath.Join(configPaths[0], configFilename))
 		if !runtimeDocker() {

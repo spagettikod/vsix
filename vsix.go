@@ -5,7 +5,8 @@ import (
 )
 
 var version = "SET VERSION IN MAKEFILE"
+var buildDate = "SET BUILD DATE IN MAKEFILE"
 
 func main() {
-	cmd.Execute(version)
+	cmd.Execute(version, buildDate)
 }

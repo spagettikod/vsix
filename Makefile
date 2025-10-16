@@ -1,8 +1,7 @@
 VERSION=5.0.0-beta
 OUTPUT=_pkg
-OUTPUT_LINUX=$(OUTPUT)/linux
-OUTPUT_MACOS=$(OUTPUT)/macos
 PWD=$(shell pwd)
+DATE=$(shell date -u -Iseconds)
 .PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
 
 default: help
@@ -18,20 +17,22 @@ build: setup			## Build vsix for current platform
 	@CGO_ENABLED=1 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
 
 docker:					## Build and push Docker container for arm64 and amd64
-	@docker buildx build --push --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
+	@docker buildx build --load --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
 
 down:					## Shut down services used for development
 	@-docker stop minio
 	@-docker rm minio
 	@-docker network rm vsixminionet
 
+install: 				## Install vsix locally
+	@CGO_ENABLED=1 go install -tags fts5 -ldflags "-X main.version=$(VERSION) -X main.buildDate=$(DATE)" vsix.go
+
 package: build			## Build and package Linux (amd64) and MacOS executables
 	@tar -C $(OUTPUT_LINUX) -czf $(OUTPUT)/vsix$(VERSION).linux-amd64.tar.gz vsix
 	@tar -C $(OUTPUT_MACOS) -czf $(OUTPUT)/vsix$(VERSION).macos-arm64.tar.gz vsix	
 
 setup:					## Setup and prepare for build
-	@mkdir -p $(OUTPUT_LINUX)
-	@mkdir -p $(OUTPUT_MACOS)
+	@mkdir -p $(OUTPUT)
 
 test:					## Run tests
 	@docker build --target test . && docker rmi `docker image ls --filter label=vsix_intermediate=true -q`
