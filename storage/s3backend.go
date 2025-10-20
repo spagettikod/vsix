@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/url"
@@ -20,10 +19,11 @@ type S3Config struct {
 	Bucket          string
 	CredentialsFile string
 	Profile         string
+	Prefix          string
 	useSSL          bool
 }
 
-func NewS3Config(urlStr, bucket, credentialsFile, profile string) (S3Config, error) {
+func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile string) (S3Config, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return S3Config{}, err
@@ -33,7 +33,8 @@ func NewS3Config(urlStr, bucket, credentialsFile, profile string) (S3Config, err
 		Bucket:          bucket,
 		CredentialsFile: credentialsFile,
 		Profile:         profile,
-		useSSL:          u.Scheme == "https:",
+		Prefix:          prefix,
+		useSSL:          u.Scheme == "https",
 	}, nil
 }
 
@@ -41,6 +42,7 @@ type S3Backend struct {
 	BaseBackend
 	c   *minio.Client
 	bkt string
+	cfg S3Config
 }
 
 func NewS3Backend(cfg S3Config) (Backend, error) {
@@ -54,6 +56,7 @@ func NewS3Backend(cfg S3Config) (Backend, error) {
 	s3 := &S3Backend{
 		c:   c,
 		bkt: cfg.Bucket,
+		cfg: cfg,
 	}
 	s3.BaseBackend = BaseBackend{impl: s3}
 	return s3, nil
@@ -66,7 +69,7 @@ func (s3 S3Backend) ListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, e
 	tags := map[string]vscode.VersionTag{}
 
 	var s3err error
-	prefix := ExtensionPath(uid) + "/"
+	prefix := filepath.Join(s3.cfg.Prefix, ExtensionPath(uid), "/")
 	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
 		if obj.Err != nil {
 			s3err = obj.Err
@@ -96,7 +99,7 @@ func (s3 S3Backend) LoadExtensionMetadata(uid vscode.UniqueID) ([]byte, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(ExtensionPath(uid), extensionMetadataFilename), minio.GetObjectOptions{})
+	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(s3.cfg.Prefix, ExtensionPath(uid), extensionMetadataFilename), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +112,7 @@ func (s3 S3Backend) LoadVersionMetadata(tag vscode.VersionTag) ([]byte, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
+	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +127,7 @@ func (s3 S3Backend) SaveExtensionMetadata(ext vscode.Extension) error {
 	defer cancel()
 
 	jext := ext.ToJSON()
-	objectName := filepath.Join(ExtensionPath(ext.UniqueID()), extensionMetadataFilename)
+	objectName := filepath.Join(s3.cfg.Prefix, ExtensionPath(ext.UniqueID()), extensionMetadataFilename)
 
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(jext), int64(len(jext)), minio.PutObjectOptions{
 		ContentType: "application/json",
@@ -140,7 +143,7 @@ func (s3 S3Backend) SaveVersionMetadata(uid vscode.UniqueID, v vscode.Version) e
 	tag := v.Tag(uid)
 
 	jv := v.ToJSON()
-	objectName := filepath.Join(AssetPath(tag), versionMetadataFilename)
+	objectName := filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename)
 
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(jv), int64(len(jv)), minio.PutObjectOptions{
 		ContentType: "application/json",
@@ -153,7 +156,7 @@ func (s3 S3Backend) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	objectName := filepath.Join(AssetPath(tag), string(atype))
+	objectName := filepath.Join(s3.cfg.Prefix, AssetPath(tag), string(atype))
 
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
@@ -185,7 +188,7 @@ func (s3 S3Backend) Remove(tag vscode.VersionTag) error {
 }
 
 func (s3 S3Backend) LoadAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey) (io.ReadCloser, error) {
-	return s3.c.GetObject(context.Background(), s3.bkt, filepath.Join(AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
+	return s3.c.GetObject(context.Background(), s3.bkt, filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
 }
 
 func (s3 S3Backend) listPublishers() ([]string, error) {
@@ -193,7 +196,7 @@ func (s3 S3Backend) listPublishers() ([]string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var s3err error
-	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Recursive: false}) {
+	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: s3.cfg.Prefix, Recursive: false}) {
 		if obj.Err != nil {
 			s3err = obj.Err
 		} else {
@@ -215,7 +218,7 @@ func (s3 S3Backend) listUniqueID() ([]vscode.UniqueID, error) {
 	defer cancel()
 	var s3err error
 	for _, publisher := range publishers {
-		for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: publisher + "/", Recursive: false}) {
+		for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: filepath.Join(s3.cfg.Prefix, publisher, "/"), Recursive: false}) {
 			slog.Debug("extension name found", "key", obj.Key, "publisher", publisher, "path", obj.Key)
 			spl := strings.Split(obj.Key, "/")
 			if len(spl) > 2 {
@@ -235,15 +238,15 @@ func (s3 S3Backend) listUniqueID() ([]vscode.UniqueID, error) {
 }
 
 func (s3 S3Backend) uidToKey(uid vscode.UniqueID) string {
-	return fmt.Sprintf("%s/%s", uid.Publisher, uid.Name)
+	return filepath.Join(s3.cfg.Prefix, uid.Publisher, uid.Name)
 }
 
 func (s3 S3Backend) tagToKey(tag vscode.VersionTag) string {
 	s := s3.uidToKey(tag.UniqueID)
 	if tag.HasVersion() {
-		s = fmt.Sprintf("%s/%s", s, tag.Version)
+		s = filepath.Join(s, tag.Version)
 		if tag.HasTargetPlatform() {
-			s = fmt.Sprintf("%s/%s", s, tag.TargetPlatform)
+			s = filepath.Join(s, tag.TargetPlatform)
 		}
 	}
 	return s

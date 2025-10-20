@@ -42,6 +42,7 @@ var (
 		"VSIX_LOG_VERBOSE":    false,
 		"VSIX_PLATFORMS":      []string{},
 		"VSIX_S3_CREDENTIALS": "~/.aws/credentials",
+		"VSIX_S3_PREFIX":      "",
 		"VSIX_S3_PROFILE":     "default",
 		"VSIX_S3_URL":         "http://localhost:9000",
 		"VSIX_S3_BUCKET":      "",
@@ -182,6 +183,7 @@ func setupBackend() error {
 		s3cfg, err := storage.NewS3Config(
 			viper.GetString("VSIX_S3_URL"),
 			viper.GetString("VSIX_S3_BUCKET"),
+			viper.GetString("VSIX_S3_PREFIX"),
 			viper.GetString("VSIX_S3_CREDENTIALS"),
 			viper.GetString("VSIX_S3_PROFILE"),
 		)
