@@ -194,22 +194,22 @@ func (c Cache) Reindex(bend Backend) (int, int, error) {
 func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	b, err := bend.LoadExtensionMetadata(uid)
 	if err != nil {
-		return 0, fmt.Errorf("error loading metadata: %w", err)
+		return 0, fmt.Errorf("error loading metadata for %v: %w", uid.String(), err)
 	}
 	if err := c.PutExtension(uid, b); err != nil {
-		return 0, fmt.Errorf("error saving metadata to cache: %w", err)
+		return 0, fmt.Errorf("error saving metadata to cache för %v: %w", uid.String(), err)
 	}
 	tags, err := bend.ListVersionTags(uid)
 	if err != nil {
-		return 0, fmt.Errorf("error listing version tags: %w", err)
+		return 0, fmt.Errorf("error listing version tags for %v: %w", uid.String(), err)
 	}
 	for _, tag := range tags {
 		b, err := bend.LoadVersionMetadata(tag)
 		if err != nil {
-			return 0, fmt.Errorf("error loading version metadata: %w", err)
+			return 0, fmt.Errorf("error loading version metadata for %v: %w", tag.String(), err)
 		}
 		if err := c.PutVersion(uid, b); err != nil {
-			return 0, fmt.Errorf("error saving version metadata to cache: %w", err)
+			return 0, fmt.Errorf("error saving version metadata to cache for %v: %w", tag.String(), err)
 		}
 	}
 	return len(tags), nil

@@ -47,6 +47,8 @@ var infoCmd = &cobra.Command{
 		fmt.Println("  Config in use:  ", filename)
 		fmt.Println("")
 
+		fmt.Println("VSIX_S3_APC_DELTA", viper.GetBool("VSIX_S3_APC_DELTA"))
+
 		// current configuration
 		fmt.Println("Current configuration")
 		fmt.Println("---------------------")

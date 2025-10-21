@@ -3,11 +3,13 @@ package storage
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/url"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -21,9 +23,10 @@ type S3Config struct {
 	Profile         string
 	Prefix          string
 	useSSL          bool
+	apcDelta        bool
 }
 
-func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile string) (S3Config, error) {
+func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile string, apcDelta bool) (S3Config, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return S3Config{}, err
@@ -35,6 +38,7 @@ func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile string) (S3Con
 		Profile:         profile,
 		Prefix:          prefix,
 		useSSL:          u.Scheme == "https",
+		apcDelta:        apcDelta,
 	}, nil
 }
 
@@ -69,14 +73,18 @@ func (s3 S3Backend) ListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, e
 	tags := map[string]vscode.VersionTag{}
 
 	var s3err error
-	prefix := filepath.Join(s3.cfg.Prefix, ExtensionPath(uid), "/")
-	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+	prefix := filepath.Join(s3.cfg.Prefix, ExtensionPath(uid))
+	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: prefix + "/", Recursive: true}) {
 		if obj.Err != nil {
 			s3err = obj.Err
 			slog.Error("list version tag error", "error", s3err, "uid", uid.String())
 			continue
 		}
-		keySplit := strings.Split(obj.Key, "/")
+		key := obj.Key
+		if len(s3.cfg.Prefix) != 0 {
+			key = obj.Key[len(s3.cfg.Prefix)+1:]
+		}
+		keySplit := strings.Split(key, "/")
 		if len(keySplit) < 4 {
 			continue
 		}
@@ -85,7 +93,7 @@ func (s3 S3Backend) ListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, e
 			Version:        keySplit[2],
 			TargetPlatform: keySplit[3],
 		}
-		slog.Debug("tag", "stringValue", t.String(), "key", obj.Key, "prefix", prefix)
+		slog.Debug("found tag", "stringValue", t.String(), "key", obj.Key, "prefix", prefix)
 		tags[t.String()] = t
 	}
 	tagarr := []vscode.VersionTag{}
@@ -112,9 +120,10 @@ func (s3 S3Backend) LoadVersionMetadata(tag vscode.VersionTag) ([]byte, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	obj, err := s3.c.GetObject(ctx, s3.bkt, filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
+	objectName := filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename)
+	obj, err := s3.c.GetObject(ctx, s3.bkt, objectName, minio.GetObjectOptions{})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting object %v: %w", objectName, err)
 	}
 
 	return io.ReadAll(obj)
@@ -133,6 +142,10 @@ func (s3 S3Backend) SaveExtensionMetadata(ext vscode.Extension) error {
 		ContentType: "application/json",
 	})
 
+	if s3.cfg.apcDelta {
+		return s3.saveAPCDelta(ctx, objectName)
+	}
+
 	return err
 }
 
@@ -149,6 +162,10 @@ func (s3 S3Backend) SaveVersionMetadata(uid vscode.UniqueID, v vscode.Version) e
 		ContentType: "application/json",
 	})
 
+	if s3.cfg.apcDelta {
+		return s3.saveAPCDelta(ctx, objectName)
+	}
+
 	return err
 }
 
@@ -161,6 +178,10 @@ func (s3 S3Backend) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, 
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
+
+	if s3.cfg.apcDelta {
+		return s3.saveAPCDelta(ctx, objectName)
+	}
 
 	return err
 }
@@ -196,11 +217,15 @@ func (s3 S3Backend) listPublishers() ([]string, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var s3err error
-	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: s3.cfg.Prefix, Recursive: false}) {
+	prefix := s3.cfg.Prefix
+	if len(prefix) != 0 {
+		prefix = prefix + "/"
+	}
+	for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: prefix, Recursive: false}) {
 		if obj.Err != nil {
 			s3err = obj.Err
 		} else {
-			slog.Debug("publisher found", "publisher", filepath.Base(obj.Key))
+			slog.Debug("publisher found", "publisher", filepath.Base(obj.Key), "prefix", prefix)
 			publishers = append(publishers, filepath.Base(obj.Key))
 		}
 	}
@@ -218,7 +243,7 @@ func (s3 S3Backend) listUniqueID() ([]vscode.UniqueID, error) {
 	defer cancel()
 	var s3err error
 	for _, publisher := range publishers {
-		for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: filepath.Join(s3.cfg.Prefix, publisher, "/"), Recursive: false}) {
+		for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: filepath.Join(s3.cfg.Prefix, publisher) + "/", Recursive: false}) {
 			slog.Debug("extension name found", "key", obj.Key, "publisher", publisher, "path", obj.Key)
 			spl := strings.Split(obj.Key, "/")
 			if len(spl) > 2 {
@@ -250,4 +275,14 @@ func (s3 S3Backend) tagToKey(tag vscode.VersionTag) string {
 		}
 	}
 	return s
+}
+
+func (s3 S3Backend) saveAPCDelta(ctx context.Context, objectName string) error {
+	deltaObjectName := filepath.Join("delta", time.Now().Format("2006_01_02"), objectName)
+	data := []byte(objectName)
+	slog.Debug("saving APC delta", "objectName", objectName, "deltaObjectName", deltaObjectName)
+	_, err := s3.c.PutObject(ctx, s3.bkt, deltaObjectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
+		ContentType: "text/plain",
+	})
+	return err
 }
