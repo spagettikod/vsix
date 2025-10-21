@@ -7,8 +7,8 @@ DATE=$(shell date -u -Iseconds)
 default: help
 
 help:
-	@echo "Build targets for vsix $(VERSION)\n"
-	@egrep -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@echo "Build targets for vsix $(VERSION)"
+	@grep -E -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 clean:					## Clean build artifacts
 	@rm -rf $(OUTPUT)
