@@ -41,7 +41,7 @@ var (
 		"VSIX_LOG_DEBUG":      false,
 		"VSIX_LOG_VERBOSE":    false,
 		"VSIX_PLATFORMS":      []string{},
-		"VSIX_S3_CREDENTIALS": "~/.aws/credentials",
+		"VSIX_S3_CREDENTIALS": "",
 		"VSIX_S3_PREFIX":      "",
 		"VSIX_S3_PROFILE":     "default",
 		"VSIX_S3_URL":         "http://localhost:9000",
