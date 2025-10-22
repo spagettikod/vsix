@@ -23,10 +23,10 @@ type S3Config struct {
 	Profile         string
 	Prefix          string
 	useSSL          bool
-	apcDelta        bool
+	apcProcessor    string
 }
 
-func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile string, apcDelta bool) (S3Config, error) {
+func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile, apcProcessor string) (S3Config, error) {
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return S3Config{}, err
@@ -38,7 +38,7 @@ func NewS3Config(urlStr, bucket, prefix, credentialsFile, profile string, apcDel
 		Profile:         profile,
 		Prefix:          prefix,
 		useSSL:          u.Scheme == "https",
-		apcDelta:        apcDelta,
+		apcProcessor:    apcProcessor,
 	}, nil
 }
 
@@ -138,15 +138,15 @@ func (s3 S3Backend) SaveExtensionMetadata(ext vscode.Extension) error {
 	jext := ext.ToJSON()
 	objectName := filepath.Join(s3.cfg.Prefix, ExtensionPath(ext.UniqueID()), extensionMetadataFilename)
 
+	slog.Debug("saving extension metadata", "objectName", objectName)
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(jext), int64(len(jext)), minio.PutObjectOptions{
 		ContentType: "application/json",
 	})
 
-	if s3.cfg.apcDelta {
-		return s3.saveAPCDelta(ctx, objectName)
+	if err != nil {
+		return err
 	}
-
-	return err
+	return s3.saveAPCDelta(ctx, filepath.Join(ExtensionPath(ext.UniqueID()), extensionMetadataFilename))
 }
 
 func (s3 S3Backend) SaveVersionMetadata(uid vscode.UniqueID, v vscode.Version) error {
@@ -158,15 +158,16 @@ func (s3 S3Backend) SaveVersionMetadata(uid vscode.UniqueID, v vscode.Version) e
 	jv := v.ToJSON()
 	objectName := filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename)
 
+	slog.Debug("saving version metadata", "objectName", objectName)
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(jv), int64(len(jv)), minio.PutObjectOptions{
 		ContentType: "application/json",
 	})
 
-	if s3.cfg.apcDelta {
-		return s3.saveAPCDelta(ctx, objectName)
+	if err != nil {
+		return err
 	}
 
-	return err
+	return s3.saveAPCDelta(ctx, filepath.Join(AssetPath(tag), versionMetadataFilename))
 }
 
 func (s3 S3Backend) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, contentType string, data []byte) error {
@@ -175,15 +176,16 @@ func (s3 S3Backend) SaveAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey, 
 
 	objectName := filepath.Join(s3.cfg.Prefix, AssetPath(tag), string(atype))
 
+	slog.Debug("saving asset", "objectName", objectName)
 	_, err := s3.c.PutObject(ctx, s3.bkt, objectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 
-	if s3.cfg.apcDelta {
-		return s3.saveAPCDelta(ctx, objectName)
+	if err != nil {
+		return err
 	}
 
-	return err
+	return s3.saveAPCDelta(ctx, filepath.Join(AssetPath(tag), string(atype)))
 }
 
 func (s3 S3Backend) Remove(tag vscode.VersionTag) error {
@@ -277,10 +279,13 @@ func (s3 S3Backend) tagToKey(tag vscode.VersionTag) string {
 	return s
 }
 
-func (s3 S3Backend) saveAPCDelta(ctx context.Context, objectName string) error {
-	deltaObjectName := filepath.Join("delta", time.Now().Format("2006_01_02"), objectName)
-	data := []byte(objectName)
-	slog.Debug("saving APC delta", "objectName", objectName, "deltaObjectName", deltaObjectName)
+func (s3 S3Backend) saveAPCDelta(ctx context.Context, objectNameWithoutPrefix string) error {
+	if s3.cfg.apcProcessor == "" {
+		return nil
+	}
+	deltaObjectName := filepath.Join("delta", s3.cfg.apcProcessor, time.Now().Format("2006_01_02"), objectNameWithoutPrefix)
+	data := []byte(objectNameWithoutPrefix)
+	slog.Debug("saving APC delta", "objectName", objectNameWithoutPrefix, "deltaObjectName", deltaObjectName)
 	_, err := s3.c.PutObject(ctx, s3.bkt, deltaObjectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: "text/plain",
 	})
