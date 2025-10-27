@@ -284,8 +284,8 @@ func (s3 S3Backend) saveAPCDelta(ctx context.Context, objectNameWithoutPrefix st
 		return nil
 	}
 	deltaObjectName := filepath.Join("delta", s3.cfg.apcProcessor, time.Now().Format("2006_01_02"), objectNameWithoutPrefix)
-	data := []byte(objectNameWithoutPrefix)
-	slog.Debug("saving APC delta", "objectName", objectNameWithoutPrefix, "deltaObjectName", deltaObjectName)
+	data := []byte(filepath.Join(s3.cfg.apcProcessor, objectNameWithoutPrefix))
+	slog.Debug("saving APC delta", "objectName", objectNameWithoutPrefix, "deltaObjectName", deltaObjectName, "data", string(data))
 	_, err := s3.c.PutObject(ctx, s3.bkt, deltaObjectName, bytes.NewReader(data), int64(len(data)), minio.PutObjectOptions{
 		ContentType: "text/plain",
 	})

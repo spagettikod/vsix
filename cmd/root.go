@@ -186,7 +186,7 @@ func setupBackend() error {
 			viper.GetString("VSIX_S3_PREFIX"),
 			viper.GetString("VSIX_S3_CREDENTIALS"),
 			viper.GetString("VSIX_S3_PROFILE"),
-			viper.GetString("VSIX_S3_APC_PROCESSOR"),
+			viper.GetString("VSIX_S3_BACKPACK_PROCESSOR"),
 		)
 		if err != nil {
 			return err
