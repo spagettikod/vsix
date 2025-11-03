@@ -30,7 +30,7 @@ var reindexCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		extCount, verCount, err := cache.Reindex(backend)
+		extCount, verCount, err := cache.ReindexP(backend)
 		if err != nil {
 			slog.Error("error opening backend storage, exiting", "error", err)
 			os.Exit(1)

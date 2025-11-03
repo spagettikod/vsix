@@ -1,6 +1,6 @@
 module github.com/spagettikod/vsix
 
-go 1.23.5
+go 1.24.0
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.32
@@ -11,6 +11,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.21.0
 	golang.org/x/mod v0.26.0
+	golang.org/x/sync v0.17.0
 )
 
 require (

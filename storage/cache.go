@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -188,6 +190,57 @@ func (c Cache) Reindex(bend Backend) (int, int, error) {
 		}
 		versionCount += count
 	}
+	return len(uids), versionCount, nil
+}
+
+func (c Cache) ReindexP(bend Backend) (int, int, error) {
+	// find all unique identifiers stored at the backend
+	uids, err := bend.listUniqueID()
+	if err != nil {
+		return 0, 0, fmt.Errorf("error listing unqiue identifiers from backend: %w", err)
+	}
+
+	// Create a buffered channel to limit concurrency to 5
+	semaphore := make(chan struct{}, 5)
+
+	// Use a mutex to safely update shared counters
+	var mu sync.Mutex
+	versionCount := 0
+
+	// Use errgroup to manage parallel execution and error handling
+	var g errgroup.Group
+
+	for _, uid := range uids {
+		// Capture loop variable to avoid closure issues
+		currentUID := uid
+
+		// Acquire semaphore slot
+		semaphore <- struct{}{}
+
+		g.Go(func() error {
+			// Always release semaphore slot when done
+			defer func() { <-semaphore }()
+
+			// Call IndexExtension
+			count, err := c.IndexExtension(bend, currentUID)
+			if err != nil {
+				return err
+			}
+
+			// Safely update version count
+			mu.Lock()
+			versionCount += count
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	// Wait for all goroutines to complete
+	if err := g.Wait(); err != nil {
+		return 0, 0, err
+	}
+
 	return len(uids), versionCount, nil
 }
 
