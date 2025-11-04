@@ -9,11 +9,13 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/spagettikod/vsix/vscode"
+	"golang.org/x/sync/errgroup"
 )
 
 type S3Config struct {
@@ -244,19 +246,37 @@ func (s3 S3Backend) listUniqueID() ([]vscode.UniqueID, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var s3err error
+
+	var mu sync.Mutex
+	semaphore := make(chan struct{}, 20)
+	var g errgroup.Group
 	for _, publisher := range publishers {
-		for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: filepath.Join(s3.cfg.Prefix, publisher) + "/", Recursive: false}) {
-			slog.Debug("extension name found", "key", obj.Key, "publisher", publisher, "path", obj.Key)
-			spl := strings.Split(obj.Key, "/")
-			if len(spl) > 2 {
-				uid := vscode.UniqueID{Publisher: publisher, Name: filepath.Base(obj.Key)}
-				uids[uid.String()] = uid
+		semaphore <- struct{}{}
+		g.Go(func() error {
+			defer func() {
+				<-semaphore
+			}()
+			for obj := range s3.c.ListObjects(ctx, s3.bkt, minio.ListObjectsOptions{Prefix: filepath.Join(s3.cfg.Prefix, publisher) + "/", Recursive: false}) {
+				slog.Debug("extension name found", "key", obj.Key, "publisher", publisher, "path", obj.Key)
+				spl := strings.Split(obj.Key, "/")
+				if len(spl) > 2 {
+					uid := vscode.UniqueID{Publisher: publisher, Name: filepath.Base(obj.Key)}
+					mu.Lock()
+					uids[uid.String()] = uid
+					mu.Unlock()
+				}
+				if obj.Err != nil {
+					s3err = obj.Err
+				}
 			}
-			if obj.Err != nil {
-				s3err = obj.Err
-			}
-		}
+			return nil
+		})
 	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
 	uidarr := []vscode.UniqueID{}
 	for _, v := range uids {
 		uidarr = append(uidarr, v)

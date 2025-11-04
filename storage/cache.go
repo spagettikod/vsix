@@ -210,7 +210,7 @@ func (c Cache) ReindexP(bend Backend, p cli.Progresser) (int, int, error) {
 	p.Max(len(uids))
 
 	// Create a buffered channel to limit concurrency to 5
-	semaphore := make(chan struct{}, 5)
+	semaphore := make(chan struct{}, 20)
 
 	// Use a mutex to safely update shared counters
 	var mu sync.Mutex

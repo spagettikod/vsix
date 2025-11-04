@@ -101,7 +101,8 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 		}
 		extensionsToAdd = marketplace.Deduplicate(extensionsToAdd)
 
-		p.Text("Adding")
+		p.Max(len(extensionsToAdd))
+		p.Text("Adding extensions")
 		CommonFetchAndSave(extensionsToAdd, start, p, argGrp)
 		p.Done()
 	},
