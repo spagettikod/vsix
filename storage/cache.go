@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"golang.org/x/sync/errgroup"
@@ -193,12 +195,19 @@ func (c Cache) Reindex(bend Backend) (int, int, error) {
 	return len(uids), versionCount, nil
 }
 
-func (c Cache) ReindexP(bend Backend) (int, int, error) {
+func (c Cache) ReindexP(bend Backend, p cli.Progresser) (int, int, error) {
+	start := time.Now()
+	slog.Debug("listing unique identifiers")
+
+	go p.DoWork()
 	// find all unique identifiers stored at the backend
 	uids, err := bend.listUniqueID()
+	p.StopWork()
 	if err != nil {
 		return 0, 0, fmt.Errorf("error listing unqiue identifiers from backend: %w", err)
 	}
+	slog.Debug("unique identifiers listed", "elapsedTime", time.Since(start).Round(time.Millisecond), "count", len(uids))
+	p.Max(len(uids))
 
 	// Create a buffered channel to limit concurrency to 5
 	semaphore := make(chan struct{}, 5)
@@ -210,6 +219,7 @@ func (c Cache) ReindexP(bend Backend) (int, int, error) {
 	// Use errgroup to manage parallel execution and error handling
 	var g errgroup.Group
 
+	p.Text("Indexing")
 	for _, uid := range uids {
 		// Capture loop variable to avoid closure issues
 		currentUID := uid
@@ -219,14 +229,16 @@ func (c Cache) ReindexP(bend Backend) (int, int, error) {
 
 		g.Go(func() error {
 			// Always release semaphore slot when done
-			defer func() { <-semaphore }()
+			defer func() {
+				p.Next()
+				<-semaphore
+			}()
 
 			// Call IndexExtension
 			count, err := c.IndexExtension(bend, currentUID)
 			if err != nil {
 				return err
 			}
-
 			// Safely update version count
 			mu.Lock()
 			versionCount += count

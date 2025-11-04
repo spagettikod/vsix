@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/storage"
 	"github.com/spf13/cobra"
@@ -46,6 +47,8 @@ pre-release-flag.`,
 		argGrp := slog.Group("args", "cmd", "update", "preRelease", preRelease)
 
 		extensionsToUpdate := []marketplace.ExtensionRequest{}
+		p := cli.NewProgress(0, "Listing extensions", !(verbose || debug))
+		go p.DoWork()
 		if len(args) > 0 {
 			for _, uid := range argsToUniqueIDOrExit(args) {
 				ext, err := cache.FindByUniqueID(uid)
@@ -84,7 +87,10 @@ pre-release-flag.`,
 			slog.Error("no extensions to update")
 			os.Exit(1)
 		}
-
-		CommonFetchAndSave(extensionsToUpdate, start, argGrp)
+		p.StopWork()
+		p.Max(len(extensionsToUpdate))
+		p.Text("Updating")
+		CommonFetchAndSave(extensionsToUpdate, start, p, argGrp)
+		p.Done()
 	},
 }

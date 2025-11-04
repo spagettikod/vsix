@@ -1,8 +1,6 @@
 package main
 
-import (
-	"github.com/spagettikod/vsix/cmd"
-)
+import "github.com/spagettikod/vsix/cmd"
 
 var version = "SET VERSION IN MAKEFILE"
 var buildDate = "SET BUILD DATE IN MAKEFILE"

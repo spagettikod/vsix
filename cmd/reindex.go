@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spf13/cobra"
 )
 
@@ -25,12 +26,15 @@ var reindexCmd = &cobra.Command{
 		start := time.Now()
 
 		// recreate the cache storage, dropping tables and recreating them
+		slog.Debug("removing existing cache data")
 		if err := cache.Reset(); err != nil {
 			slog.Error("error resetting cache, exiting", "error", err)
 			os.Exit(1)
 		}
 
-		extCount, verCount, err := cache.ReindexP(backend)
+		p := cli.NewProgress(0, "Listing extensions", !(verbose || debug))
+		extCount, verCount, err := cache.ReindexP(backend, p)
+		p.Done()
 		if err != nil {
 			slog.Error("error opening backend storage, exiting", "error", err)
 			os.Exit(1)

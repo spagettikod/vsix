@@ -3,10 +3,10 @@ module github.com/spagettikod/vsix
 go 1.24.0
 
 require (
+	fortio.org/progressbar v1.2.0
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/minio/minio-go/v7 v7.0.94
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/schollz/progressbar/v3 v3.18.0
 	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.21.0
@@ -27,7 +27,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/minio/crc64nvme v1.0.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
@@ -42,6 +41,5 @@ require (
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )

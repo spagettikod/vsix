@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/schollz/progressbar/v3"
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
@@ -70,6 +70,7 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 		targetPlatforms := viper.GetStringSlice("VSIX_PLATFORMS")
 		argGrp := slog.Group("args", "cmd", "add", "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
+		p := cli.NewProgress(0, "Starting up", !(verbose || debug))
 		// loop all args (extension unique identifiers)
 		extensionsToAdd := []marketplace.ExtensionRequest{}
 		for _, uid := range argsToUniqueIDOrExit(args) {
@@ -100,7 +101,9 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 		}
 		extensionsToAdd = marketplace.Deduplicate(extensionsToAdd)
 
-		CommonFetchAndSave(extensionsToAdd, start, argGrp)
+		p.Text("Adding")
+		CommonFetchAndSave(extensionsToAdd, start, p, argGrp)
+		p.Done()
 	},
 }
 
@@ -111,28 +114,19 @@ type RequestResult struct {
 	Versions        []vscode.Version
 }
 
-func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start time.Time, argGrp slog.Attr) {
+func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start time.Time, p cli.Progresser, argGrp slog.Attr) {
 	slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
 
 	skipped := 0
 	matched := 0
 	assets := 0
-	bar := progressbar.NewOptions(len(extensionsToAdd),
-		progressbar.OptionShowCount(),
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionSetVisibility(!(verbose || debug)),
-		progressbar.OptionShowDescriptionAtLineEnd(),
-		progressbar.OptionSetPredictTime(false),
-		progressbar.OptionSetElapsedTime(true),
-		progressbar.OptionClearOnFinish(),
-	)
 	for _, er := range extensionsToAdd {
 		extStart := time.Now()
-		bar.Describe(er.UniqueID.String() + ": downloading metadata")
+		// p.Text(er.UniqueID.String())
 		res, err := FetchAndSaveMetadata(er)
 		if err != nil {
 			slog.Error("error fetching extension metadata", "error", err, "uniqueId", res.UniqueID)
-			bar.Add(1)
+			p.Next()
 			continue
 		}
 		skipped += res.VersionsSkipped
@@ -141,7 +135,7 @@ func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start ti
 		for _, v := range res.Versions {
 			for _, a := range v.Files {
 				extAsset++
-				bar.Describe(v.Tag(res.UniqueID).String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
+				// p.Text(v.Tag(res.UniqueID).String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
 				aGrp := slog.Group("asset", "type", a.Type, "url", a.URI(v))
 				if err := FetchAndSaveAsset(v.Tag(res.UniqueID), v, a); err != nil {
 					slog.Error("error saving asset, cleaning up this version and continuing with next version", "error", err, aGrp, argGrp)
@@ -159,7 +153,7 @@ func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start ti
 			}
 		}
 		slog.Info("extension processed", slog.Group("extension", "uniqueId", res.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
-		bar.Add(1)
+		p.Next()
 	}
 	statusGrp := slog.Group("versions", "found", matched+skipped, "matched", matched, "skipped", skipped, "downloadedAssets", assets)
 	slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
