@@ -108,9 +108,9 @@ func (c Cache) Reset() error {
 	return c.create()
 }
 
-// PutExtension adds (or updates) the extension metadata into the cache. It
+// putExtension adds (or updates) the extension metadata into the cache. It
 // also updates the full text search index accordingly.
-func (c Cache) PutExtension(uid vscode.UniqueID, metadata []byte) error {
+func (c Cache) putExtension(uid vscode.UniqueID, metadata []byte) error {
 	tx, err := c.conn.Begin()
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (c Cache) PutExtension(uid vscode.UniqueID, metadata []byte) error {
 	return tx.Commit()
 }
 
-func (c Cache) PutVersion(uid vscode.UniqueID, metadata []byte) error {
+func (c Cache) putVersion(uid vscode.UniqueID, metadata []byte) error {
 	_, err := c.conn.Exec(`INSERT INTO version (uid, metadata)
 					   	   VALUES (?, ?)
 					   	   ON CONFLICT(tag) DO UPDATE
@@ -261,7 +261,7 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error loading metadata for %v: %w", uid.String(), err)
 	}
-	if err := c.PutExtension(uid, b); err != nil {
+	if err := c.putExtension(uid, b); err != nil {
 		return 0, fmt.Errorf("error saving metadata to cache för %v: %w", uid.String(), err)
 	}
 	tags, err := bend.ListVersionTags(uid)
@@ -273,7 +273,7 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("error loading version metadata for %v: %w", tag.String(), err)
 		}
-		if err := c.PutVersion(uid, b); err != nil {
+		if err := c.putVersion(uid, b); err != nil {
 			return 0, fmt.Errorf("error saving version metadata to cache for %v: %w", tag.String(), err)
 		}
 	}

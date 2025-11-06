@@ -95,7 +95,7 @@ func (s3 S3Backend) ListVersionTags(uid vscode.UniqueID) ([]vscode.VersionTag, e
 			Version:        keySplit[2],
 			TargetPlatform: keySplit[3],
 		}
-		slog.Debug("found tag", "stringValue", t.String(), "key", obj.Key, "prefix", prefix)
+		slog.Debug("found tag in S3", "stringValue", t.String(), "key", obj.Key, "prefix", prefix)
 		tags[t.String()] = t
 	}
 	tagarr := []vscode.VersionTag{}

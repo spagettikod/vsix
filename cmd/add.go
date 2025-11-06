@@ -205,9 +205,7 @@ func FetchAndSaveMetadata(request marketplace.ExtensionRequest) (RequestResult, 
 	if err := backend.SaveExtensionMetadata(ext); err != nil {
 		return res, fmt.Errorf("error saving extension metadata: %w", err)
 	}
-	if err := cache.PutExtension(res.UniqueID, []byte(ext.ToJSON())); err != nil {
-		return res, fmt.Errorf("error saving extension metadata to cache: %w", err)
-	}
+
 	for _, v := range ext.Versions {
 		// skip if this version exists
 		tag := v.Tag(res.UniqueID)
@@ -228,9 +226,6 @@ func FetchAndSaveMetadata(request marketplace.ExtensionRequest) (RequestResult, 
 			if err := backend.SaveVersionMetadata(res.UniqueID, v); err != nil {
 				return res, fmt.Errorf("error saving version metadata: %w", err)
 			}
-			if err := cache.PutVersion(res.UniqueID, []byte(v.ToJSON())); err != nil {
-				return res, fmt.Errorf("error saving version metadata to cache: %w", err)
-			}
 			res.TotalAssets += len(v.Files)
 			res.Versions = append(res.Versions, v)
 		} else {
@@ -238,6 +233,8 @@ func FetchAndSaveMetadata(request marketplace.ExtensionRequest) (RequestResult, 
 			slog.Debug("skipping version, doesn't match criteria", "tag", v.Tag(res.UniqueID))
 		}
 	}
+	slog.Debug("updating extension cache", "extension", res.UniqueID)
+	cache.IndexExtension(backend, ext.UniqueID())
 	return res, nil
 }
 
