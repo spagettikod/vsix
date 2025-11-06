@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spagettikod/vsix/cli"
@@ -17,6 +18,7 @@ import (
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/sync/errgroup"
 )
 
 func init() {
@@ -71,6 +73,7 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 		argGrp := slog.Group("args", "cmd", "add", "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
 		p := cli.NewProgress(0, "Starting up", !(verbose || debug))
+		go p.DoWork()
 		// loop all args (extension unique identifiers)
 		extensionsToAdd := []marketplace.ExtensionRequest{}
 		for _, uid := range argsToUniqueIDOrExit(args) {
@@ -101,6 +104,7 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 		}
 		extensionsToAdd = marketplace.Deduplicate(extensionsToAdd)
 
+		p.StopWork()
 		p.Max(len(extensionsToAdd))
 		p.Text("Adding extensions")
 		CommonFetchAndSave(extensionsToAdd, start, p, argGrp)
@@ -118,46 +122,73 @@ type RequestResult struct {
 func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start time.Time, p cli.Progresser, argGrp slog.Attr) {
 	slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
 
+	// Create a buffered channel to limit concurrency to 5
+	semaphore := make(chan struct{}, 3)
+	// Use a mutex to safely update shared counters
+	var mu sync.Mutex
+	// Use errgroup to manage parallel execution and error handling
+	var g errgroup.Group
+
 	skipped := 0
 	matched := 0
 	assets := 0
 	for _, er := range extensionsToAdd {
-		extStart := time.Now()
-		// p.Text(er.UniqueID.String())
-		res, err := FetchAndSaveMetadata(er)
-		if err != nil {
-			slog.Error("error fetching extension metadata", "error", err, "uniqueId", res.UniqueID)
-			p.Next()
-			continue
-		}
-		skipped += res.VersionsSkipped
-		matched += len(res.Versions)
-		extAsset := 0
-		for _, v := range res.Versions {
-			for _, a := range v.Files {
-				extAsset++
-				// p.Text(v.Tag(res.UniqueID).String() + fmt.Sprintf(": downloading asset %v of %v", extAsset, res.TotalAssets))
-				aGrp := slog.Group("asset", "type", a.Type, "url", a.URI(v))
-				if err := FetchAndSaveAsset(v.Tag(res.UniqueID), v, a); err != nil {
-					slog.Error("error saving asset, cleaning up this version and continuing with next version", "error", err, aGrp, argGrp)
-					if err := backend.Remove(v.Tag(er.UniqueID)); err != nil {
-						slog.Error("failed to remove from backend", "error", err, argGrp)
-						os.Exit(1)
-					}
-					if err := cache.Delete(v.Tag(er.UniqueID)); err != nil {
-						slog.Error("failed to remove from cache", "error", err, argGrp)
-						os.Exit(1)
-					}
-					break
-				}
-				assets++
-			}
-		}
-		slog.Info("extension processed", slog.Group("extension", "uniqueId", res.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
-		p.Next()
+		semaphore <- struct{}{}
+		g.Go(func() error {
+			// Always release semaphore slot when done
+			defer func() {
+				p.Next()
+				<-semaphore
+			}()
+			s, m, a := FetchExtension(er, argGrp)
+			mu.Lock()
+			skipped += s
+			matched += m
+			assets += a
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Wait for all goroutines to complete
+	if err := g.Wait(); err != nil {
+		slog.Error("error fetching extension", "error", err)
+		os.Exit(1)
 	}
 	statusGrp := slog.Group("versions", "found", matched+skipped, "matched", matched, "skipped", skipped, "downloadedAssets", assets)
 	slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), statusGrp, argGrp)
+}
+
+func FetchExtension(er marketplace.ExtensionRequest, argGrp slog.Attr) (int, int, int) {
+	extStart := time.Now()
+	res, err := FetchAndSaveMetadata(er)
+	if err != nil {
+		slog.Error("error fetching extension metadata", "error", err, "uniqueId", res.UniqueID)
+		return 0, 0, 0
+	}
+	skipped := res.VersionsSkipped
+	matched := len(res.Versions)
+	assets := 0
+	for _, v := range res.Versions {
+		for _, a := range v.Files {
+			aGrp := slog.Group("asset", "type", a.Type, "url", a.URI(v))
+			if err := FetchAndSaveAsset(v.Tag(res.UniqueID), v, a); err != nil {
+				slog.Error("error saving asset, cleaning up this version and continuing with next version", "error", err, aGrp, argGrp)
+				if err := backend.Remove(v.Tag(er.UniqueID)); err != nil {
+					slog.Error("failed to remove from backend", "error", err, argGrp)
+					os.Exit(1)
+				}
+				if err := cache.Delete(v.Tag(er.UniqueID)); err != nil {
+					slog.Error("failed to remove from cache", "error", err, argGrp)
+					os.Exit(1)
+				}
+				break
+			}
+			assets++
+		}
+	}
+	slog.Info("extension processed", slog.Group("extension", "uniqueId", res.UniqueID.String()), "elapsedTime", time.Since(extStart).Round(time.Millisecond), argGrp)
+	return skipped, matched, assets
 }
 
 func FetchAndSaveMetadata(request marketplace.ExtensionRequest) (RequestResult, error) {
