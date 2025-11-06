@@ -79,7 +79,8 @@ func init() {
 			}
 			configPaths = append(configPaths, configDir)
 		} else {
-			log.Fatalln(err)
+			slog.Info("could not find users home dir, won't add it to list of places to look for configration file", "error", err)
+			err = nil
 		}
 		// ./.env
 		localPath, err := filepath.Abs(".")
@@ -116,23 +117,29 @@ func init() {
 		log.Fatalln(err)
 	}
 
-	if runtimeDocker() {
-		defaults["VSIX_CACHE_FILE"] = filepath.Join("cache", storage.CacheFilename)
-		defaults["VSIX_FS_DIR"] = "/data"
-	} else {
-		// these defaults are caculated and are not hard coded in the map
-		dataDir, err := storage.UserDataDir()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		if err := os.MkdirAll(filepath.Join(dataDir, "vsix"), 0750); err != nil {
-			if !os.IsExist(err) {
-				log.Fatalln(err)
+	if _, found := os.LookupEnv("VSIX_CACHE_FILE"); !found {
+		if runtimeDocker() {
+			defaults["VSIX_CACHE_FILE"] = filepath.Join("cache", storage.CacheFilename)
+			defaults["VSIX_FS_DIR"] = "/data"
+		} else {
+			// these defaults are caculated and are not hard coded in the map
+			dataDir, err := storage.UserDataDir()
+			if err != nil {
+				// log.Fatalln(err)
+				slog.Error("could not create default cache file since user home folder could not be found and VSIX_CACHE_FILE is not set", "error", err)
+				defaults["VSIX_CACHE_FILE"] = ""
+			} else {
+				if err := os.MkdirAll(filepath.Join(dataDir, "vsix"), 0750); err != nil {
+					if !os.IsExist(err) {
+						log.Fatalln(err)
+					}
+				}
+				defaults["VSIX_CACHE_FILE"] = filepath.Join(dataDir, "vsix", storage.CacheFilename)
+				defaults["VSIX_FS_DIR"] = filepath.Join(dataDir, "vsix", storage.FSBackendDir)
 			}
 		}
-		defaults["VSIX_CACHE_FILE"] = filepath.Join(dataDir, "vsix", storage.CacheFilename)
-		defaults["VSIX_FS_DIR"] = filepath.Join(dataDir, "vsix", storage.FSBackendDir)
 	}
+
 	// set defaults from the default map
 	for k, v := range defaults {
 		viper.SetDefault(k, v)
