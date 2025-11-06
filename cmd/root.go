@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/spagettikod/vsix/storage"
 	"github.com/spf13/cobra"
@@ -65,6 +66,9 @@ func init() {
 	if runtimeDocker() {
 		configPaths = append(configPaths, "/config")
 	} else {
+		// /etc/vsix/.env
+		configPaths = append(configPaths, filepath.Join("/etc", "vsix"))
+		// ~/../.env
 		configDir, err := os.UserConfigDir()
 		if err == nil {
 			configDir = filepath.Join(configDir, "vsix")
@@ -77,11 +81,21 @@ func init() {
 		} else {
 			log.Fatalln(err)
 		}
-		configPaths = append(configPaths, ".")
+		// ./.env
+		localPath, err := filepath.Abs(".")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		configPaths = append(configPaths, localPath)
 	}
+
+	// reverse config paths to add them in the correct order to viper
+	slices.Reverse(configPaths)
 	for _, v := range configPaths {
 		viper.AddConfigPath(v)
 	}
+	// reverse back to keep original sort order
+	slices.Reverse(configPaths)
 
 	// reading configuration, if found
 	if err := viper.ReadInConfig(); err != nil {

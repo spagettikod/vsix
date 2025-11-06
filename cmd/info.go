@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,10 +24,6 @@ var infoCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	PersistentPreRunE:     nil,
 	Run: func(cmd *cobra.Command, args []string) {
-		wd, err := os.Getwd()
-		if err != nil {
-			log.Fatalln(err)
-		}
 		// about the configuration file
 		fmt.Println("General")
 		fmt.Println("-------")
@@ -37,8 +31,8 @@ var infoCmd = &cobra.Command{
 		fmt.Println("  Build:          ", buildDate)
 		fmt.Println("  In container:   ", runtimeDocker())
 		fmt.Println("  Config paths:   ", filepath.Join(configPaths[0], configFilename))
-		if !runtimeDocker() {
-			fmt.Println("                  ", filepath.Join(wd, configFilename))
+		for _, p := range configPaths[1:] {
+			fmt.Printf("%s%s\n", strings.Repeat(" ", 19), filepath.Join(p, configFilename))
 		}
 		filename := viper.ConfigFileUsed()
 		if filename == "" {
