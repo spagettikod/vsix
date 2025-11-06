@@ -48,7 +48,7 @@ var (
 		"VSIX_S3_URL":         "http://localhost:9000",
 		"VSIX_S3_BUCKET":      "",
 		"VSIX_SERVE_ADDR":     "0.0.0.0:8080",
-		"VSIX_SERVE_URL":      "http://example.com:8080/vsix",
+		"VSIX_SERVE_URL":      "http://localhost:8080",
 	}
 
 	rootCmd = &cobra.Command{

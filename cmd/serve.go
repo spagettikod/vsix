@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -42,7 +41,6 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 	Example:               `  $ vsix serve https://www.example.com/vsix`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		log.Fatalln("not converted to backend/cache")
 		argGrp := slog.Group("args", "cmd", "serve")
 
 		// get the path for the external URL to build the actual path
@@ -59,7 +57,7 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 		http.HandleFunc("OPTIONS /_apis/public/gallery/extensionquery", queryOptionsHandler(argGrp))
 		http.HandleFunc("POST /_apis/public/gallery/extensionquery", queryPostHandler(extURL.String()+"/asset", argGrp))
 
-		slog.Info("starting VSIX Server", argGrp)
+		slog.Info("starting VSIX Server", "addr", viper.GetString("VSIX_SERVE_ADDR"), "vsixServeUrl", viper.GetString("VSIX_SERVE_URL"), argGrp)
 		if err := http.ListenAndServe(viper.GetString("VSIX_SERVE_ADDR"), nil); err != nil {
 			slog.Error("error while serving, exiting", "error", err, argGrp)
 			os.Exit(1)

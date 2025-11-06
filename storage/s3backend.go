@@ -213,7 +213,9 @@ func (s3 S3Backend) Remove(tag vscode.VersionTag) error {
 }
 
 func (s3 S3Backend) LoadAsset(tag vscode.VersionTag, atype vscode.AssetTypeKey) (io.ReadCloser, error) {
-	return s3.c.GetObject(context.Background(), s3.bkt, filepath.Join(s3.cfg.Prefix, AssetPath(tag), versionMetadataFilename), minio.GetObjectOptions{})
+	key := filepath.Join(s3.cfg.Prefix, AssetPath(tag), string(atype))
+	slog.Debug("loading asset", "tag", tag.String(), "assetType", atype, "key", key)
+	return s3.c.GetObject(context.Background(), s3.bkt, key, minio.GetObjectOptions{})
 }
 
 func (s3 S3Backend) listPublishers() ([]string, error) {

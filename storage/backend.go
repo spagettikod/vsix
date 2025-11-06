@@ -36,7 +36,7 @@ func (bb *BaseBackend) DetectAssetContentType(tag vscode.VersionTag, assetType v
 	defer asset.Close()
 
 	buffer := make([]byte, 512)
-	_, err = asset.Read(buffer)
+	_, err = io.ReadAtLeast(asset, buffer, 1)
 	if err != nil {
 		return "", err
 	}
