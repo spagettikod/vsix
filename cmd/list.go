@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/spagettikod/vsix/vscode"
+	"github.com/spagettikod/vsix/storage"
 	"github.com/spf13/cobra"
 )
 
@@ -85,101 +83,64 @@ Some examples:
 		argGrp := slog.Group("args", "cmd", "list", "preRelease", preRelease, "targetPlatforms", targetPlatforms, "prefix", query)
 		start := time.Now()
 
-		exts, err := cache.List()
+		q := storage.NewQuery()
+		q.Platforms = targetPlatforms
+		q.IncludePreRelease = preRelease
+		q.Latest = !all
+		q.Text = query
+		if installs {
+			q.SortOrder = storage.OrderByInstalls
+		}
+		qr, err := cache.Query(q)
 		if err != nil {
 			slog.Error("error listing exstensions from cache, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
-		fexts := filterExtensions(exts, targetPlatforms, preRelease, query)
-		if installs {
-			slices.SortFunc(fexts, vscode.SortFuncExtensionByInstallCount)
-		}
 		if all {
-			ftags := filterVersions(fexts, targetPlatforms, preRelease)
 			if quiet {
-				for _, tag := range ftags {
-					fmt.Printf("%s\n", tag.String())
+				for _, r := range qr {
+					fmt.Printf("%s\n", r.Tag.String())
 				}
 			} else {
 				data := [][]string{}
-				for _, tag := range ftags {
+				for _, r := range qr {
 					tagData := []string{}
-					tagData = append(tagData, tag.UniqueID.String())
-					tagData = append(tagData, tag.Version)
-					tagData = append(tagData, tag.TargetPlatform)
-					tagData = append(tagData, fmt.Sprintf("%v", tag.PreRelease))
+					tagData = append(tagData, r.Tag.UniqueID.String())
+					tagData = append(tagData, r.Tag.Version)
+					tagData = append(tagData, r.Tag.TargetPlatform)
+					tagData = append(tagData, r.LastUpdated.Format("2006-01-02 15:04"))
+					tagData = append(tagData, fmt.Sprintf("%v", r.Tag.PreRelease))
 					data = append(data, tagData)
 				}
-				printTable([]string{"Unique ID", "Version", "Target Platform", "Pre-release"}, data)
+				printTable([]string{"Unique ID", "Version", "Target Platform", "Release Date", "Pre-release"}, data)
 			}
 		} else {
 			if quiet {
-				for _, ext := range fexts {
-					fmt.Printf("%s\n", ext.UniqueID().String())
+				for _, r := range qr {
+					fmt.Printf("%s\n", r.Tag.UniqueID.String())
 				}
 			} else {
 				data := [][]string{}
-				for _, ext := range fexts {
+				for _, r := range qr {
 					extData := []string{}
-					extData = append(extData, ext.UniqueID().String())
-					extData = append(extData, ext.LatestVersion(preRelease))
-					extData = append(extData, ext.LastUpdated.Format("2006-01-02 15:04"))
-					extData = append(extData, fmt.Sprintf("%v", ext.InstallCount()))
+					extData = append(extData, r.Tag.UniqueID.String())
+					extData = append(extData, r.Tag.Version)
+					extData = append(extData, r.LastUpdated.Format("2006-01-02 15:04"))
+					if preRelease {
+						extData = append(extData, fmt.Sprintf("%v", r.Tag.PreRelease))
+					}
+					extData = append(extData, fmt.Sprintf("%v", r.Installs))
 					data = append(data, extData)
 				}
-				printTable([]string{"Unique ID", "Latest Version", "Latest Release", "Installs"}, data)
+				if preRelease {
+					printTable([]string{"Unique ID", "Latest Version", "Latest Release", "Pre-release", "Installs"}, data)
+				} else {
+					printTable([]string{"Unique ID", "Latest Version", "Latest Release", "Installs"}, data)
+				}
 			}
 		}
-
 		slog.Debug("done", "elapsedTime", time.Since(start).Round(time.Millisecond), argGrp)
 	},
-}
-
-// filterExtensions filter extenions in the database. If no filter is applied all extenions are listed.
-func filterExtensions(exts []vscode.Extension, targetPlatforms []string, preRelease bool, prefix string) []vscode.Extension {
-	fexts := slices.Clone(exts)
-	// filter out target platforms
-	if len(targetPlatforms) > 0 {
-		fexts = slices.DeleteFunc(fexts, func(e vscode.Extension) bool {
-			return !e.MatchesTargetPlatforms(targetPlatforms...)
-		})
-	}
-
-	// filter out all that are not pre-release
-	if preRelease {
-		fexts = slices.DeleteFunc(fexts, func(e vscode.Extension) bool {
-			return !e.HasPreRelease()
-		})
-	}
-
-	// filter out anything not starting with the given prefix
-	if prefix != "" {
-		fexts = slices.DeleteFunc(fexts, func(e vscode.Extension) bool {
-			return !strings.Contains(e.UniqueID().String(), prefix)
-		})
-	}
-
-	slices.SortFunc(fexts, func(e1, e2 vscode.Extension) int {
-		return strings.Compare(strings.ToLower(e1.UniqueID().String()), strings.ToLower(e2.UniqueID().String()))
-	})
-	return fexts
-}
-
-// filterVersions apply filters and return VersionTags matching the filters. If not filters are applied all VersionTags are returned.
-func filterVersions(exts []vscode.Extension, targetPlatforms []string, preRelease bool) []vscode.VersionTag {
-	result := []vscode.VersionTag{}
-	for _, ext := range exts {
-		for _, v := range ext.Versions {
-			if len(targetPlatforms) > 0 && !slices.Contains(targetPlatforms, v.TargetPlatform()) {
-				continue
-			}
-			if preRelease && !v.IsPreRelease() {
-				continue
-			}
-			result = append(result, v.Tag(ext.UniqueID()))
-		}
-	}
-	return result
 }
 
 func printTable(headers []string, data [][]string) {

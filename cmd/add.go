@@ -82,11 +82,12 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 				TargetPlatforms: targetPlatforms,
 				PreRelease:      preRelease,
 			}
-			// if target platforms are specified, check with cache if they don't already exist
-			// otherwise add the extension for look up i marketplace
+			// Check to see if an extentsion with that unique identifier and platform
+			// combination already exists. If the combination already exist we don't
+			// need to call the Marketplace to check if we want it.
 			if len(targetPlatforms) > 0 {
 				for _, tp := range targetPlatforms {
-					exist, err := cache.PlatformExists(uid, tp)
+					exist, err := cache.Exists(uid, tp)
 					if err != nil {
 						slog.Error("error looking up if platform exists in cache, exiting", "error", err)
 						os.Exit(1)
@@ -123,7 +124,7 @@ func CommonFetchAndSave(extensionsToAdd []marketplace.ExtensionRequest, start ti
 	slog.Info("processing extensions", "extensionsToAdd", len(extensionsToAdd))
 
 	// Create a buffered channel to limit concurrency to 5
-	semaphore := make(chan struct{}, 3)
+	semaphore := make(chan struct{}, 5)
 	// Use a mutex to safely update shared counters
 	var mu sync.Mutex
 	// Use errgroup to manage parallel execution and error handling
@@ -163,7 +164,7 @@ func FetchExtension(er marketplace.ExtensionRequest, argGrp slog.Attr) (int, int
 	extStart := time.Now()
 	res, err := FetchAndSaveMetadata(er)
 	if err != nil {
-		slog.Error("error fetching extension metadata", "error", err, "uniqueId", res.UniqueID)
+		slog.Error("error fetching extension metadata", "error", err, "uniqueId", er.UniqueID.String(), argGrp)
 		return 0, 0, 0
 	}
 	skipped := res.VersionsSkipped
@@ -230,7 +231,7 @@ func FetchAndSaveMetadata(request marketplace.ExtensionRequest) (RequestResult, 
 			res.Versions = append(res.Versions, v)
 		} else {
 			res.VersionsSkipped++
-			slog.Debug("skipping version, doesn't match criteria", "tag", v.Tag(res.UniqueID))
+			slog.Debug("skipping version, doesn't match criteria", "tag", v.Tag(res.UniqueID), "preRelease", v.IsPreRelease())
 		}
 	}
 	slog.Debug("updating extension cache", "extension", res.UniqueID)

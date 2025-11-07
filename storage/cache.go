@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,6 +59,65 @@ CREATE TABLE IF NOT EXISTS version (
 	created_at	DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
 	FOREIGN KEY (uid) REFERENCES extension(id)
 )`
+
+	sqlCreateQueryPreReleaseView = `
+CREATE VIEW IF NOT EXISTS query_pre_release_vw AS
+    SELECT
+		ext.id AS extension_id,
+		json_extract(ext.metadata, '$.extensionId') AS meta_extension_id,
+        version.uid,
+        version.tag,
+        COALESCE(
+            (
+                SELECT json_extract(value, '$.value')
+                FROM json_each(json(version.metadata), '$.properties')
+                WHERE json_extract(value, '$.key') = 'Microsoft.VisualStudio.Code.PreRelease'
+                LIMIT 1
+            ),
+            'false'
+        ) AS pre_release,
+		version.platform,
+        json_extract(version.metadata, '$.lastUpdated') AS last_updated,
+        (
+            SELECT json_extract(value, '$.value')
+            FROM json_each(json(ext.metadata), '$.statistics')
+            WHERE json_extract(value, '$.statisticName') = 'install'
+            LIMIT 1
+        ) AS install,
+        ROW_NUMBER() OVER (PARTITION BY version.uid ORDER BY datetime(json_extract(version.metadata, '$.lastUpdated')) DESC) AS version_rank
+    FROM version AS version
+    JOIN extension AS ext ON ext.uid = version.uid
+`
+
+	sqlCreateQueryView = `
+CREATE VIEW IF NOT EXISTS query_vw AS
+    SELECT
+		ext.id AS extension_id,
+		json_extract(ext.metadata, '$.extensionId') AS meta_extension_id, 
+        version.uid,
+        version.tag,
+        COALESCE(
+            (
+                SELECT json_extract(value, '$.value')
+                FROM json_each(json(version.metadata), '$.properties')
+                WHERE json_extract(value, '$.key') = 'Microsoft.VisualStudio.Code.PreRelease'
+                LIMIT 1
+            ),
+            'false'
+        ) AS pre_release,
+		version.platform,
+        json_extract(version.metadata, '$.lastUpdated') AS last_updated,
+        (
+            SELECT json_extract(value, '$.value')
+            FROM json_each(json(ext.metadata), '$.statistics')
+            WHERE json_extract(value, '$.statisticName') = 'install'
+            LIMIT 1
+        ) AS install,
+        ROW_NUMBER() OVER (PARTITION BY version.uid ORDER BY datetime(json_extract(version.metadata, '$.lastUpdated')) DESC) AS version_rank
+    FROM version AS version
+    JOIN extension AS ext ON ext.uid = version.uid
+	WHERE pre_release = 'false'
+`
 )
 
 type Cache struct {
@@ -91,6 +151,12 @@ func (c Cache) create() error {
 	if _, err := c.conn.Exec(sqlCreateVersionTable); err != nil {
 		return err
 	}
+	if _, err := c.conn.Exec(sqlCreateQueryPreReleaseView); err != nil {
+		return err
+	}
+	if _, err := c.conn.Exec(sqlCreateQueryView); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -103,6 +169,12 @@ func (c Cache) Reset() error {
 		return err
 	}
 	if _, err := c.conn.Exec("DROP TABLE IF EXISTS version"); err != nil {
+		return err
+	}
+	if _, err := c.conn.Exec("DROP VIEW IF EXISTS query_pre_release_vw"); err != nil {
+		return err
+	}
+	if _, err := c.conn.Exec("DROP VIEW IF EXISTS query_vw"); err != nil {
 		return err
 	}
 	return c.create()
@@ -280,6 +352,108 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	return len(tags), nil
 }
 
+type OrderBy string
+
+const (
+	OrderByInstalls OrderBy = "install"
+)
+
+type Query struct {
+	Text              string
+	Platforms         []string
+	IncludePreRelease bool
+	Latest            bool
+	SortOrder         OrderBy
+}
+
+func NewQuery() Query {
+	return Query{
+		Platforms:         []string{},
+		IncludePreRelease: false,
+		Latest:            true,
+	}
+}
+
+func (q Query) quoteWrapPlatforms() []string {
+	if q.Platforms == nil {
+		return nil
+	}
+	wrapped := []string{}
+	for _, p := range q.Platforms {
+		wrapped = append(wrapped, fmt.Sprintf("'%s'", p))
+	}
+	return wrapped
+}
+
+func (q Query) andCondition(sql, c string) string {
+	var prefix string
+	if sql == "" {
+		prefix = " WHERE "
+	} else {
+		prefix = " AND "
+	}
+	return fmt.Sprintf("%s %s %s ", sql, prefix, c)
+}
+
+func (q Query) ToSQL() string {
+	sql := ""
+	if q.Text != "" {
+		sql = q.andCondition(sql, fmt.Sprintf("extension_id IN (SELECT id FROM extension_fts WHERE query MATCH '%s')", q.Text))
+	}
+	if len(q.Platforms) > 0 {
+		sql = q.andCondition(sql, fmt.Sprintf("platform IN (%s)", strings.Join(q.quoteWrapPlatforms(), ", ")))
+	}
+	if q.Latest {
+		sql = q.andCondition(sql, "version_rank = 1")
+	}
+	switch q.SortOrder {
+	case OrderByInstalls:
+		sql += "ORDER BY install DESC"
+	default:
+		sql += "ORDER BY uid, version_rank"
+	}
+	return sql
+}
+
+// QueryResult query result from a Query run against the cache.
+type QueryResult struct {
+	Tag         vscode.VersionTag
+	LastUpdated time.Time
+	Installs    int
+}
+
+func (c Cache) Query(q Query) ([]QueryResult, error) {
+	sql := "SELECT tag, pre_release, last_updated, install FROM "
+	if q.IncludePreRelease {
+		sql += "query_pre_release_vw "
+	} else {
+		sql += "query_vw "
+	}
+	sql += q.ToSQL()
+	slog.Debug("query generated the following sql statement", "sql", sql)
+	rows, err := c.conn.Query(sql)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := []QueryResult{}
+	for rows.Next() {
+		r := QueryResult{}
+		var strTag, strPreRelease, strDate string
+		rows.Scan(&strTag, &strPreRelease, &strDate, &r.Installs)
+		if r.Tag, err = vscode.ParseVersionTag(strTag); err != nil {
+			return nil, err
+		}
+		if r.LastUpdated, err = time.Parse(time.RFC3339, strDate); err != nil {
+			return nil, err
+		}
+		r.Tag.PreRelease = (strPreRelease == "true")
+		res = append(res, r)
+	}
+	return res, nil
+}
+
 // List all extensions (and their versions) in the cache.
 func (c Cache) List() ([]vscode.Extension, error) {
 	rows, err := c.conn.Query("SELECT metadata FROM extension")
@@ -287,23 +461,54 @@ func (c Cache) List() ([]vscode.Extension, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var meta string
+
+	var metas []string
 	exts := []vscode.Extension{}
 	for rows.Next() {
-		ext := vscode.Extension{}
+		var meta string
 		if err := rows.Scan(&meta); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scan failed: %w", err)
 		}
-		if err := json.Unmarshal([]byte(meta), &ext); err != nil {
-			return nil, err
-		}
-		vers, err := c.listVersions(ext.UniqueID())
-		if err != nil {
-			return nil, fmt.Errorf("error listing version for extension %s: %w", ext.UniqueID(), err)
-		}
-		ext.Versions = vers
-		exts = append(exts, ext)
+		metas = append(metas, meta)
 	}
+
+	// Create a buffered channel to limit concurrency to 5
+	semaphore := make(chan struct{}, 20)
+	// Use a mutex to safely update shared counters
+	var mu sync.Mutex
+
+	// Use errgroup to manage parallel execution and error handling
+	var g errgroup.Group
+
+	for _, meta := range metas {
+		semaphore <- struct{}{}
+
+		g.Go(func() error {
+			defer func() {
+				<-semaphore
+			}()
+
+			ext := vscode.Extension{}
+
+			if err := json.Unmarshal([]byte(meta), &ext); err != nil {
+				return fmt.Errorf("unmarshal failed: %w", err)
+			}
+			vers, err := c.listVersions(ext.UniqueID())
+			if err != nil {
+				return fmt.Errorf("error listing version for extension %s: %w", ext.UniqueID(), err)
+			}
+			ext.Versions = vers
+			mu.Lock()
+			exts = append(exts, ext)
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
 	return exts, nil
 }
 
@@ -394,7 +599,27 @@ func (c Cache) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, error) {
 	return ext, nil
 }
 
-func (c Cache) PlatformExists(uid vscode.UniqueID, platform string) (bool, error) {
+func (c Cache) ListPlatforms(uid vscode.UniqueID) ([]string, error) {
+	rows, err := c.conn.Query("SELECT DISTINCT platform FROM query_pre_release_vw WHERE uid = ?", uid.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	platforms := []string{}
+
+	for rows.Next() {
+		p := ""
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		platforms = append(platforms, p)
+	}
+
+	return platforms, nil
+}
+
+func (c Cache) Exists(uid vscode.UniqueID, platform string) (bool, error) {
 	v := ""
 	if err := c.conn.QueryRow("SELECT DISTINCT id FROM version WHERE uid = ? AND platform = ?", uid.String(), platform).Scan(&v); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

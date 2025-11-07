@@ -68,15 +68,22 @@ pre-release-flag.`,
 				extensionsToUpdate = append(extensionsToUpdate, er)
 			}
 		} else {
-			exts, err := cache.List()
+			q := storage.NewQuery()
+			q.IncludePreRelease = true
+			qr, err := cache.Query(q)
 			if err != nil {
 				slog.Error("error listing extensions from cache", "error", err, argGrp)
 				os.Exit(1)
 			}
-			for _, ext := range exts {
+			for _, r := range qr {
+				platforms, err := cache.ListPlatforms(r.Tag.UniqueID)
+				if err != nil {
+					slog.Error("error listing platforms from cache", "error", err, "uniqueID", r.Tag.UniqueID.String(), argGrp)
+					os.Exit(1)
+				}
 				er := marketplace.ExtensionRequest{
-					UniqueID:        ext.UniqueID(),
-					TargetPlatforms: ext.Platforms(),
+					UniqueID:        r.Tag.UniqueID,
+					TargetPlatforms: platforms,
 					PreRelease:      preRelease,
 				}
 				extensionsToUpdate = append(extensionsToUpdate, er)

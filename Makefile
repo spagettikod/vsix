@@ -14,7 +14,7 @@ clean:					## Clean build artifacts
 	@rm -rf $(OUTPUT)
 
 build: setup			## Build vsix for current platform
-	@CGO_ENABLED=1 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION)" vsix.go
+	@CGO_ENABLED=1 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION) -X main.buildDate=$(DATE)" vsix.go
 
 docker:					## Build and push Docker container for arm64 and amd64
 	@docker buildx build --load --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
