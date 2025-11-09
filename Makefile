@@ -13,11 +13,14 @@ help:
 clean:					## Clean build artifacts
 	@rm -rf $(OUTPUT)
 
-build: setup			## Build vsix for current platform
-	@CGO_ENABLED=1 go build -o $(OUTPUT) -tags fts5 -ldflags "-X main.version=$(VERSION) -X main.buildDate=$(DATE)" vsix.go
+build: setup			## Build vsix for arm64 and amd64 through Docker
+	@docker buildx build --output type=local,dest=$(OUTPUT) --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DATE=$(DATE) .
 
-docker:					## Build and push Docker container for arm64 and amd64
-	@docker buildx build --load --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) .
+docker:					## Build Docker container for arm64 and amd64
+	@docker buildx build --output type=image --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DATE=$(DATE) .
+
+docker-dev:				## Build and push Docker container to development registry for arm64 and amd64
+	@docker buildx build --output type=registry --platform=linux/amd64,linux/arm64 -t registry.spagettikod.se:8443/vsix:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DATE=$(DATE) .
 
 down:					## Shut down services used for development
 	@-docker stop minio
