@@ -29,6 +29,7 @@ func Parse(id string) (UniqueID, bool) {
 	if id == "" {
 		return UniqueID{}, false
 	}
+	id = strings.TrimSpace(id)
 	spl := strings.Split(id, ".")
 	if len(spl) != 2 {
 		return UniqueID{}, false
