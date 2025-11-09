@@ -126,7 +126,7 @@ type Cache struct {
 }
 
 func OpenCache(filename string) (Cache, error) {
-	db, err := sql.Open("sqlite3", filename)
+	db, err := sql.Open("sqlite3", fmt.Sprintf(("file:%s?_journal_mode=wal"), filename))
 	if err != nil {
 		return Cache{}, err
 	}
@@ -246,25 +246,6 @@ func (c Cache) putVersion(uid vscode.UniqueID, metadata []byte) error {
 					   	   SET metadata = excluded.metadata,
 						   	   updated_at = CURRENT_TIMESTAMP`, uid.String(), metadata)
 	return err
-}
-
-func (c Cache) Reindex(bend Backend) (int, int, error) {
-	// find all unique identifiers stored at the backend
-	uids, err := bend.listUniqueID()
-	if err != nil {
-		return 0, 0, fmt.Errorf("error listing unqiue identifiers from backend: %w", err)
-	}
-
-	// go through all found identifiers and index them in the cache
-	versionCount := 0
-	for _, uid := range uids {
-		count, err := c.IndexExtension(bend, uid)
-		if err != nil {
-			return 0, 0, err
-		}
-		versionCount += count
-	}
-	return len(uids), versionCount, nil
 }
 
 func (c Cache) ReindexP(bend Backend, p cli.Progresser) (int, int, error) {
