@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -36,7 +37,7 @@ var infoCmd = &cobra.Command{
 		}
 		filename := viper.ConfigFileUsed()
 		if filename == "" {
-			filename = "<no file found>"
+			filename = "<no file used>"
 		}
 		fmt.Println("  Config in use:  ", filename)
 		fmt.Println("")
@@ -44,29 +45,22 @@ var infoCmd = &cobra.Command{
 		// current configuration
 		fmt.Println("Current configuration")
 		fmt.Println("---------------------")
-		fmt.Print("The * means the value has been modifed from the default value.\n\n")
+		fmt.Print("No prefix indicates default value (eventhough is might have been explicitly set).\n")
+		fmt.Print("f = value differs from default and is set in from configuration file\n")
+		fmt.Print("e = value differs from default and is set by environment variable\n\n")
 		for _, key := range sortDefaultKeys() {
-			changed := false
 			var value any
 			switch key {
 			case "VSIX_PLATFORMS":
-				changed = len(viper.GetStringSlice(key)) != 0
 				value = viper.GetStringSlice(key)
 			case "VSIX_LOG_DEBUG":
-				changed = viper.GetBool(key) != defaults[key]
 				value = viper.GetBool(key)
 			case "VSIX_LOG_VERBOSE":
-				changed = viper.GetBool(key) != defaults[key]
 				value = viper.GetBool(key)
 			default:
-				changed = viper.GetString(key) != defaults[key]
 				value = viper.Get(key)
 			}
-			if changed {
-				fmt.Print("* ")
-			} else {
-				fmt.Print("  ")
-			}
+			fmt.Print(configValueSource(key))
 
 			fmt.Println(key, spaces(key), value)
 		}
@@ -90,6 +84,20 @@ var infoCmd = &cobra.Command{
 			fmt.Println("  Target platforms: ", strings.Join(strings.Split(stats.Platforms, ","), "\n                    "))
 		}
 	},
+}
+
+// configValueSource returns a string where the configuration key value was set or if it equals the default value.
+func configValueSource(key string) string {
+	// check to see if value differs from default, we then know it has been changed
+	if viper.Get(key) != defaults[key] {
+		_, isEnv := os.LookupEnv(key)
+		if isEnv {
+			return "e "
+		} else if viper.InConfig(key) {
+			return "f "
+		}
+	}
+	return "  "
 }
 
 func sortDefaultKeys() []string {
