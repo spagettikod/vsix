@@ -27,6 +27,7 @@ func init() {
 		log.Fatalln(err)
 	}
 	dbAddCmd.Flags().BoolVar(&preRelease, "pre-release", false, "include pre-release versions, these are skipped by default")
+	dbAddCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "don't produce any output except errors")
 	rootCmd.AddCommand(dbAddCmd)
 }
 
@@ -72,7 +73,7 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
 		targetPlatforms := viper.GetStringSlice("VSIX_PLATFORMS")
 		argGrp := slog.Group("args", "cmd", "add", "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
-		p := cli.NewProgress(0, "Starting up", !(verbose || debug))
+		p := cli.NewProgress(0, "Starting up", !(verbose || debug || quiet))
 		go p.DoWork()
 		// loop all args (extension unique identifiers)
 		extensionsToAdd := []marketplace.ExtensionRequest{}

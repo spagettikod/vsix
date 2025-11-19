@@ -523,6 +523,7 @@ func (c Cache) ListVersionTags(tag vscode.VersionTag) ([]vscode.VersionTag, erro
 	rows, err := c.conn.Query("SELECT tag FROM version WHERE tag LIKE ?", tag.String()+"%")
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			slog.Debug("ListVersionTag: tag not found", "tag", tag)
 			return nil, ErrCacheNotFound
 		}
 		return nil, err
@@ -549,6 +550,7 @@ func (c Cache) FindByVersionTag(tag vscode.VersionTag) (vscode.Version, error) {
 	err := c.conn.QueryRow("SELECT metadata FROM version WHERE tag = ?", tag.String()).Scan(&metadata)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			slog.Debug("FindByVersionTag: tag not found", "tag", tag)
 			return vscode.Version{}, ErrCacheNotFound
 		}
 		return vscode.Version{}, err
@@ -562,6 +564,7 @@ func (c Cache) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, error) {
 	err := c.conn.QueryRow("SELECT metadata FROM extension WHERE uid = ?", uid.String()).Scan(&metadata)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			slog.Debug("FindByUniqueID: uid not found", "uid", uid.String())
 			return vscode.Extension{}, ErrCacheNotFound
 		}
 		return vscode.Extension{}, err

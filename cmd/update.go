@@ -14,6 +14,7 @@ import (
 
 func init() {
 	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "update should fetch pre-release versions")
+	updateCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "don't produce any output except errors")
 	rootCmd.AddCommand(updateCmd)
 }
 
@@ -47,7 +48,7 @@ pre-release-flag.`,
 		argGrp := slog.Group("args", "cmd", "update", "preRelease", preRelease)
 
 		extensionsToUpdate := []marketplace.ExtensionRequest{}
-		p := cli.NewProgress(0, "Listing extensions", !(verbose || debug))
+		p := cli.NewProgress(0, "Listing extensions", !(verbose || debug || quiet))
 		go p.DoWork()
 		if len(args) > 0 {
 			for _, uid := range argsToUniqueIDOrExit(args) {
@@ -75,6 +76,7 @@ pre-release-flag.`,
 				slog.Error("error listing extensions from cache", "error", err, argGrp)
 				os.Exit(1)
 			}
+			slog.Debug("extensions found", "count", len(qr), argGrp)
 			for _, r := range qr {
 				platforms, err := cache.ListPlatforms(r.Tag.UniqueID)
 				if err != nil {

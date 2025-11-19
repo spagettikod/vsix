@@ -227,11 +227,11 @@ func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 		results, err := cache.Run(query)
 		if err != nil {
 			if err == marketplace.ErrInvalidQuery {
-				slog.Error("query contained in the request is not valid", "error", err)
+				slog.Error("query contained in the request is not valid", "error", err, "query", string(bites), requestGroup(r), argGrp)
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			} else {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				slog.Error("error running query", "error", err, requestGroup(r), argGrp)
+				slog.Error("error running query", "error", err, "query", string(bites), requestGroup(r), argGrp)
 			}
 			return
 		}
