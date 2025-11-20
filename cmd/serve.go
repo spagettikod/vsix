@@ -52,8 +52,8 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 
 		http.HandleFunc(fmt.Sprintf("OPTIONS /asset/%s", vscode.AssetURLPattern), assetOptionsHandler(argGrp))
 		http.HandleFunc(fmt.Sprintf("GET /asset/%s", vscode.AssetURLPattern), assetGetHandler(argGrp))
-		http.HandleFunc("OPTIONS /_gallery/{publisher}/{name}/latest", latestOptionsHandler(argGrp))
-		http.HandleFunc("GET /_gallery/{publisher}/{name}/latest", latestGetHandler(extURL.String()+"/asset", argGrp))
+		http.HandleFunc("OPTIONS /_apis/public/gallery/vscode/{publisher}/{name}/latest", latestOptionsHandler(argGrp))
+		http.HandleFunc("GET /_apis/public/gallery/vscode/{publisher}/{name}/latest", latestGetHandler(extURL.String()+"/asset", argGrp))
 		http.HandleFunc("OPTIONS /_apis/public/gallery/extensionquery", queryOptionsHandler(argGrp))
 		http.HandleFunc("POST /_apis/public/gallery/extensionquery", queryPostHandler(extURL.String()+"/asset", argGrp))
 
@@ -155,7 +155,6 @@ func latestGetHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 		start := time.Now()
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Content-Security-Policy", "connect-src 'self' http://localhost:8080;")
 
 		// extract unique identifier from URL pattern
 		uid, ok := vscode.Parse(fmt.Sprintf("%s.%s", r.PathValue("publisher"), r.PathValue("name")))
@@ -216,6 +215,7 @@ func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 		}
 		defer r.Body.Close()
 
+		slog.Debug("query parsed", "query", string(bites), argGrp)
 		query := marketplace.Query{}
 		err = json.Unmarshal(bites, &query)
 		if err != nil {
@@ -224,6 +224,7 @@ func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 			return
 		}
 
+		qStart := time.Now()
 		results, err := cache.Run(query)
 		if err != nil {
 			if err == marketplace.ErrInvalidQuery {
@@ -235,6 +236,7 @@ func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 			}
 			return
 		}
+		slog.Debug("query finished", "elapsedTime", time.Since(qStart).Round(time.Millisecond), argGrp)
 		results.RewriteAssetURL(assetURLPrefix)
 
 		bites, err = json.Marshal(results)
