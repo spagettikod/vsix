@@ -34,5 +34,5 @@ func Parse(id string) (UniqueID, bool) {
 	if len(spl) != 2 {
 		return UniqueID{}, false
 	}
-	return UniqueID{Publisher: spl[0], Name: spl[1]}, true
+	return UniqueID{Publisher: strings.ToLower(spl[0]), Name: strings.ToLower(spl[1])}, true
 }
