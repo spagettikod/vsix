@@ -15,6 +15,7 @@ var (
 	limit      int
 	sortByFlag string
 	nolimit    bool
+	endpoint   string
 )
 
 func init() {
@@ -22,6 +23,7 @@ func init() {
 	searchCmd.Flags().StringVarP(&sortByFlag, "sort", "s", "install", "sort critera, valid values are: none, install, rating, date")
 	searchCmd.Flags().BoolVar(&nolimit, "nolimit", false, "disables the result limit, all matching results are shown")
 	searchCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "only print unique identifier")
+	searchCmd.Flags().StringVarP(&endpoint, "endpoint", "e", marketplace.DefaultMarketplaceEndpoint, "marketplace endpoint to connect to, default is the offical marketplace")
 	rootCmd.AddCommand(searchCmd)
 }
 
@@ -54,6 +56,7 @@ by flags.`,
 		if q != "" {
 			query = marketplace.QueryLastestVersionByText(q, sortCritera)
 		}
+		query.Endpoint = endpoint
 
 		exts, err := query.RunAll(limit)
 		if err != nil {

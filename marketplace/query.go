@@ -29,6 +29,7 @@ type Query struct {
 	Filters    []Filter      `json:"filters"`
 	AssetTypes []interface{} `json:"assetTypes"`
 	Flags      QueryFlag     `json:"flags"`
+	Endpoint   string        `json:"-"`
 }
 
 type Filter struct {
@@ -88,6 +89,10 @@ const (
 	debugEnvVar = "VSIX_DEBUG"
 )
 
+const (
+	DefaultMarketplaceEndpoint = "https://marketplace.visualstudio.com"
+)
+
 var (
 	MSVSCodeCriteria          = Criteria{FilterType: FilterTypeTarget, Value: "Microsoft.VisualStudio.Code"}
 	SomeUnknownCriteria       = Criteria{FilterType: 12, Value: "4096"}
@@ -109,7 +114,9 @@ func (f QueryFlag) Is(f2 QueryFlag) bool {
 }
 
 func NewQuery() Query {
-	q := Query{}
+	q := Query{
+		Endpoint: DefaultMarketplaceEndpoint,
+	}
 	f := Filter{
 		Criteria: []Criteria{
 			MSVSCodeCriteria,
@@ -208,7 +215,8 @@ func (q Query) Run() (extensionQueryResponse, error) {
 		os.WriteFile("query.json", []byte(q.ToJSON()), 0644)
 	}
 	eqr := extensionQueryResponse{}
-	req, err := http.NewRequest(http.MethodPost, "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery", strings.NewReader(q.ToJSON()))
+	murl := fmt.Sprintf("%s/_apis/public/gallery/extensionquery", q.Endpoint)
+	req, err := http.NewRequest(http.MethodPost, murl, strings.NewReader(q.ToJSON()))
 	if err != nil {
 		return eqr, err
 	}
