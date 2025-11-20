@@ -45,9 +45,9 @@ var infoCmd = &cobra.Command{
 		// current configuration
 		fmt.Println("Current configuration")
 		fmt.Println("---------------------")
-		fmt.Print("No prefix indicates default value (eventhough is might have been explicitly set).\n")
-		fmt.Print("f = value differs from default and is set in from configuration file\n")
-		fmt.Print("e = value differs from default and is set by environment variable\n\n")
+		fmt.Print("No prefix indicates default value (even though is might have been explicitly set).\n")
+		fmt.Print("f = value differs from default, value read from configuration file\n")
+		fmt.Print("e = value differs from default, value read from environment variable\n\n")
 		for _, key := range sortDefaultKeys() {
 			var value any
 			switch key {
