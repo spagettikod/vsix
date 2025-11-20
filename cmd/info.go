@@ -37,7 +37,7 @@ var infoCmd = &cobra.Command{
 		}
 		filename := viper.ConfigFileUsed()
 		if filename == "" {
-			filename = "<no file used>"
+			filename = "<none>"
 		}
 		fmt.Println("  Config in use:  ", filename)
 		fmt.Println("")
