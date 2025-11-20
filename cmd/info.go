@@ -88,8 +88,19 @@ var infoCmd = &cobra.Command{
 
 // configValueSource returns a string where the configuration key value was set or if it equals the default value.
 func configValueSource(key string) string {
+	notDefault := false
+	switch key {
+	case "VSIX_PLATFORMS":
+		p1 := viper.GetStringSlice(key)
+		p2 := defaults[key].([]string)
+		slices.Sort(p1)
+		slices.Sort(p2)
+		notDefault = !slices.Equal(p1, p2)
+	default:
+		notDefault = viper.Get(key) != defaults[key]
+	}
 	// check to see if value differs from default, we then know it has been changed
-	if viper.Get(key) != defaults[key] {
+	if notDefault {
 		_, isEnv := os.LookupEnv(key)
 		if isEnv {
 			return "e "
