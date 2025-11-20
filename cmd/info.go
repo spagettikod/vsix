@@ -18,7 +18,7 @@ func init() {
 
 var infoCmd = &cobra.Command{
 	Use:                   "info",
-	Short:                 "Prints information about the current vsix setup",
+	Short:                 "Print information about your setup",
 	Long:                  `Prints information about the current vsix setup.`,
 	Example:               "  $ vsix info",
 	Args:                  cobra.NoArgs,

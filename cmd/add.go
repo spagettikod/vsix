@@ -33,22 +33,18 @@ func init() {
 
 var dbAddCmd = &cobra.Command{
 	Use:   "add [flags] <identifier...>",
-	Short: "Add extension(s) from Marketplace to local database",
-	Long: `Add extension(s) from Marketplace to local database.
+	Short: "Add extensions to your local storage",
+	Long: `Add extensions to your local storage from the official marketplace.
 
-Downloads the latest version of the given extension(s) from Marketplace to the local database.
-Once added, use the update command to keep the extension up to date with Marketplace. Use
-the serve-command to host your own Marketplace with the downloaded extensions.
-
+Add downloads the latest version of the given extension(s) from the official marketplace.
 Multiple identifiers, separated by space, can be used to add multiple extensions at once.
 
 Target platforms
 ----------------
 By default all platform versions of an extension are added. You can limit which platforms
-to add by using --platforms, which is a comma separated list of platforms. You can
-view available platforms for an extension by using the info-command. When using --platforms
-please note that only those platforms given will be downloaded. The default "universal"
-platform will not be added unless it is included in the list.
+to add by using --platforms, which is a comma separated list of platforms. When using
+--platforms please note that only those platforms given will be downloaded. The default
+"universal" platform will not be added unless it is included in the list.
 
 Pre-releases
 ------------
@@ -61,10 +57,10 @@ selecting the latest version, regardless if marked as pre-release, use --pre-rel
     $ vsix add redhat.java 
 
   Add 100 most popular extensions, download the latest version that is not a pre-release:
-    $ vsix add $(vsix search --limit 100 --quiet)
+    $ vsix add $(vsix search --limit 100 --sort install --quiet)
 
   Add the 100 most popular extensions, use the latest version regardless if it's a pre-release or not:
-    $ vsix add --pre-release $(vsix search --limit 100 --quiet)
+    $ vsix add --pre-release $(vsix search --limit 100 --sort install --quiet)
 `,
 	DisableFlagsInUseLine: true,
 	Args:                  cobra.MinimumNArgs(1),

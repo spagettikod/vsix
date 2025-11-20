@@ -26,7 +26,7 @@ func init() {
 	pruneCmd.Flags().BoolVar(&dry, "dry-run", false, "execute command without actually removing anything")
 	pruneCmd.Flags().BoolVar(&removeEmpty, "remove-empty", false, "remove extensions without any versions")
 	pruneCmd.Flags().BoolVarP(&force, "force", "f", false, "don't prompt for confirmation before deleting")
-	rootCmd.AddCommand(pruneCmd)
+	// rootCmd.AddCommand(pruneCmd)
 }
 
 var pruneCmd = &cobra.Command{

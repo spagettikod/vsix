@@ -17,10 +17,10 @@ var (
 )
 
 func init() {
-	listCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list to limit the results to the given platforms")
-	listCmd.Flags().BoolVar(&preRelease, "pre-release", false, "limit result to only pre-release versions")
+	listCmd.Flags().StringSliceVar(&targetPlatforms, "platforms", []string{}, "comma-separated list limiting results to the given platforms")
+	listCmd.Flags().BoolVar(&preRelease, "pre-release", false, "pre-release versions in the output")
 	listCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "only print unique identifier")
-	listCmd.Flags().BoolVarP(&all, "all", "a", false, "print version details")
+	listCmd.Flags().BoolVarP(&all, "all", "a", false, "print all versions, not just the latest")
 	listCmd.Flags().BoolVar(&installs, "installs", false, "sort by number of installs")
 	rootCmd.AddCommand(listCmd)
 }
@@ -28,7 +28,7 @@ func init() {
 var listCmd = &cobra.Command{
 	Use:     "list [flags] [query]",
 	Aliases: []string{"ls"},
-	Short:   "List extensions in local database",
+	Short:   "List extensions available locally",
 	Long: `List extensions available locally. By default all extensions are listed
 in a table format. Use --all to list all extensions and their individual versions.
 
@@ -53,17 +53,18 @@ Some examples:
 
    ms-vscode.cpptools
    ------------------
-   Unique identifier, this tag will remove the entire extension "ms-vscode.cpptools".
-   
+   Unique identifier, this identifies the extension "ms-vscode.cpptools", regardless
+   of version and platform.
+
    ms-vscode.cpptools@1.24.1
    -------------------------
-   Tag with version, this tag will remove version 1.24.1 (regardless of target platform)
-   for extension "ms-vscode.cpptools".
-   
+   Tag with version, this tag identifies version 1.24.1 of the extension regardless
+   of platform.
+
    ms-vscode.cpptools@1.24.1:win32-arm64
    -------------------------------------
-   Tag with version and platform, this tag will remove platform "win32-arm64" in version
-   1.24.1 for extension "ms-vscode.cpptools`,
+   Tag with version and platform, this tag is the most specific which point to a exact
+   version of an extension.`,
 	Example: `  List all extension versions where unique identifier starts with "redhat":
     $ vsix list redhat
 

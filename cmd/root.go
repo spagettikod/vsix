@@ -148,6 +148,7 @@ func init() {
 
 func Execute(version, bdate string) {
 	buildDate = bdate
+	rootCmd.CompletionOptions.DisableDefaultCmd = true
 	rootCmd.Version = version
 	rootCmd.SetVersionTemplate(`{{printf "%s" .Version}}
 `)
