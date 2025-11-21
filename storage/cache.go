@@ -484,11 +484,20 @@ func (c Cache) listVersions(uid vscode.UniqueID, latestVersionOnly bool) ([]vsco
 	var rows *sql.Rows
 	var err error
 	if latestVersionOnly {
-		rows, err = c.conn.Query(`SELECT v.metadata
-								  FROM 	version AS v
-								  WHERE v.uid = ?
-								  AND 	v.version = (SELECT version FROM query_vw WHERE uid = ? AND version_rank = 1)
-								  ORDER BY v.last_updated DESC`, uid.String(), uid.String())
+		rows, err = c.conn.Query(`WITH MaxLastUpdated AS (
+									SELECT MAX(last_updated) AS max_last_updated
+									FROM version
+									WHERE uid = :uid
+								)
+								SELECT v.metadata
+								FROM version v, MaxLastUpdated m
+								WHERE uid = :uid
+								AND v.version IN (
+									SELECT version 
+									FROM version 
+									WHERE uid = :uid
+									AND last_updated = m.max_last_updated
+								)`, sql.Named("uid", uid.String()))
 	} else {
 		rows, err = c.conn.Query(`SELECT v.metadata
 								  FROM 	version AS v
@@ -584,7 +593,7 @@ func (c Cache) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, error) {
 }
 
 func (c Cache) ListPlatforms(uid vscode.UniqueID) ([]string, error) {
-	rows, err := c.conn.Query("SELECT DISTINCT platform FROM query_pre_release_vw WHERE uid = ?", uid.String())
+	rows, err := c.conn.Query("SELECT DISTINCT(platform) FROM version WHERE uid = ? ORDER BY platform", uid.String())
 	if err != nil {
 		return nil, err
 	}
@@ -669,9 +678,7 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 	if q.IsEmptyQuery() {
 		// empty queries sorted by number of installs equates to a @popular query
 		sqlStr = `SELECT e.metadata
-			   	  FROM query_pre_release_vw AS vw
-			   	  JOIN extension AS e ON e.id = vw.extension_id
-			   	  WHERE version_rank = 1 `
+			   	  FROM extension AS e `
 		if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension").Scan(&totalCount); err != nil {
 			return res, err
 		}
@@ -695,23 +702,24 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 			for _, id := range extensionIds {
 				args = append(args, id)
 			}
+			p := placeholders(len(extensionIds))
 			sqlStr = `SELECT e.metadata
- 					  FROM query_pre_release_vw AS vw
-					  JOIN extension AS e ON e.id = vw.extension_id
-					  WHERE vw.meta_extension_id IN `
-			sqlStr = sqlStr + "(" + placeholders(len(extensionIds)) + ")"
-			if err := c.conn.QueryRow("SELECT COUNT(1) FROM query_pre_release_vw WHERE meta_extension_id IN ("+placeholders(len(extensionIds))+")", args...).Scan(&totalCount); err != nil {
+ 					  FROM extension AS e
+					  WHERE e.extension_id IN `
+			sqlStr = sqlStr + "(" + p + ") "
+			if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension WHERE extension_id IN ("+p+")", args...).Scan(&totalCount); err != nil {
 				return res, err
 			}
 		} else if len(extensionNames) > 0 {
 			for _, name := range extensionNames {
 				args = append(args, name)
 			}
+			p := placeholders(len(extensionNames))
 			sqlStr = `SELECT metadata
 					  FROM extension
 					  WHERE uid IN `
-			sqlStr = sqlStr + "(" + placeholders(len(extensionNames)) + ")"
-			if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension WHERE uid IN ("+placeholders(len(extensionNames))+")", args...).Scan(&totalCount); err != nil {
+			sqlStr = sqlStr + "(" + p + ") "
+			if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension WHERE uid IN ("+p+")", args...).Scan(&totalCount); err != nil {
 				return res, err
 			}
 		} else {
@@ -721,13 +729,13 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 
 	switch q.SortBy() {
 	case marketplace.ByInstallCount:
-		sqlStr += "ORDER BY vw.install DESC "
+		sqlStr += "ORDER BY e.install DESC "
 	case marketplace.ByName:
-		sqlStr += "ORDER BY vw.display_name ASC "
+		sqlStr += "ORDER BY e.display_name ASC "
 	case marketplace.ByPublishedDate:
-		sqlStr += "ORDER BY vw.published_date DESC "
+		sqlStr += "ORDER BY e.published_date DESC "
 	case marketplace.ByRating:
-		sqlStr += "ORDER BY vw.weighted_rating DESC "
+		sqlStr += "ORDER BY e.weighted_rating DESC "
 	case marketplace.ByNone:
 	}
 	sqlStr += "LIMIT ? OFFSET ?"
@@ -741,11 +749,6 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 	}
 	defer rows.Close()
 
-	if q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly) {
-		slog.Debug("only list latest version")
-	} else {
-		slog.Debug("list all versions")
-	}
 	for rows.Next() {
 		meta := ""
 		if err := rows.Scan(&meta); err != nil {
@@ -756,11 +759,13 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 			return res, err
 		}
 
+		slog.Debug("listing versions", "uid", ext.UniqueID(), "onlyLatest", q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly))
 		// fetch extension versions
 		versions, err := c.listVersions(ext.UniqueID(), q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly))
 		if err != nil {
 			return res, err
 		}
+		slog.Debug("found versions", "uid", ext.UniqueID(), "count", len(versions))
 		ext.Versions = append(ext.Versions, versions...)
 
 		extensions = append(extensions, ext)
