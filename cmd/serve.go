@@ -12,13 +12,19 @@ import (
 	"os"
 	"time"
 
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
+var (
+	periodicReindexInterval *time.Duration
+)
+
 func init() {
+	periodicReindexInterval = serveCmd.Flags().Duration("reindex-interval", 30*time.Minute, "interval between period reindexing")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -50,6 +56,24 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 			os.Exit(1)
 		}
 
+		ticker := time.NewTicker(*periodicReindexInterval)
+		defer ticker.Stop()
+
+		done := make(chan bool)
+
+		go func() {
+			slog.Debug("starting periodic reindexer", "interval", periodicReindexInterval)
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					periodicReindex()
+					slog.Debug("periodic reindexer going to sleep", "duration", periodicReindexInterval)
+				}
+			}
+		}()
+
 		http.HandleFunc(fmt.Sprintf("OPTIONS /asset/%s", vscode.AssetURLPattern), assetOptionsHandler(argGrp))
 		http.HandleFunc(fmt.Sprintf("GET /asset/%s", vscode.AssetURLPattern), assetGetHandler(argGrp))
 		http.HandleFunc("OPTIONS /_apis/public/gallery/vscode/{publisher}/{name}/latest", latestOptionsHandler(argGrp))
@@ -60,6 +84,7 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 		slog.Info("starting VSIX Server", "addr", viper.GetString("VSIX_SERVE_ADDR"), "vsixServeUrl", viper.GetString("VSIX_SERVE_URL"), argGrp)
 		if err := http.ListenAndServe(viper.GetString("VSIX_SERVE_ADDR"), nil); err != nil {
 			slog.Error("error while serving, exiting", "error", err, argGrp)
+			done <- true
 			os.Exit(1)
 		}
 	},
@@ -258,4 +283,11 @@ func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 
 func requestGroup(r *http.Request) slog.Attr {
 	return slog.Group("request", "method", r.Method, "url", r.URL)
+}
+
+func periodicReindex() {
+	start := time.Now()
+	slog.Info("starting periodic reindexing")
+	extensionCount, versionCount, err := cache.ReindexP(backend, cli.NoopProgresser{})
+	slog.Info("finished periodic reindexing", "elapsedTime", time.Since(start).Round(time.Millisecond), "err", err, "extensions", extensionCount, "versions", versionCount)
 }
