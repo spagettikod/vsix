@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/spagettikod/vsix/storage"
 	"github.com/spf13/cobra"
@@ -36,19 +37,20 @@ var (
 	configFilename string         = ".env"
 	configPaths    []string       = []string{}
 	defaults       map[string]any = map[string]any{
-		"VSIX_BACKEND":        "fs",
-		"VSIX_CACHE_FILE":     "",
-		"VSIX_FS_DIR":         "",
-		"VSIX_LOG_DEBUG":      false,
-		"VSIX_LOG_VERBOSE":    false,
-		"VSIX_PLATFORMS":      []string{},
-		"VSIX_S3_CREDENTIALS": "",
-		"VSIX_S3_PREFIX":      "",
-		"VSIX_S3_PROFILE":     "default",
-		"VSIX_S3_URL":         "http://localhost:9000",
-		"VSIX_S3_BUCKET":      "",
-		"VSIX_SERVE_ADDR":     "0.0.0.0:8080",
-		"VSIX_SERVE_URL":      "http://localhost:8080",
+		"VSIX_BACKEND":                "fs",
+		"VSIX_CACHE_FILE":             "",
+		"VSIX_FS_DIR":                 "",
+		"VSIX_LOG_DEBUG":              false,
+		"VSIX_LOG_VERBOSE":            false,
+		"VSIX_PLATFORMS":              []string{},
+		"VSIX_S3_CREDENTIALS":         "",
+		"VSIX_S3_PREFIX":              "",
+		"VSIX_S3_PROFILE":             "default",
+		"VSIX_S3_URL":                 "http://localhost:9000",
+		"VSIX_S3_BUCKET":              "",
+		"VSIX_SERVE_ADDR":             "0.0.0.0:8080",
+		"VSIX_SERVE_REINDEX_INTERVAL": 30 * time.Minute,
+		"VSIX_SERVE_URL":              "http://localhost:8080",
 	}
 
 	rootCmd = &cobra.Command{

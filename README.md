@@ -133,4 +133,5 @@ To configure vsix you use environment variables. These can be set at each execut
 |**VSIX_S3_PROFILE**|Name of the profile to use in the credentials file (see `VSIX_S3_CREDENTIALS`) when using S3 as backend. Default value is `default`.|
 |**VSIX_S3_URL**|URL to the S3 server when using S3 as backend. Default value is `http://localhost:9000`.|
 |**VSIX_SERVE_ADDR**|Address where the serve-command will listen for connections. Default value is `0.0.0.0:8080`.|
+|**VSIX_SERVE_REINDEX_INTERVAL**|When serving reindexing is run periodically to keep the cache up to date. This value controls how often to run. Value is defined as time.Duration in Go, for example 45m. Default is every 30 minutes (30m).|
 |**VSIX_SERVE_URL**|URL to the vsix server. This value is used when rewriting extension URL's so Visual Studio Code finds its way back to your marketplace when installing extensions. When [spoofing](#spoofing-the-official-marketplace) the official marketplace this should be set to `https://marketplace.visualstudio.com`. Default value is `http://localhost:8080`.|

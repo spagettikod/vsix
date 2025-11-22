@@ -19,12 +19,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	periodicReindexInterval *time.Duration
-)
-
 func init() {
-	periodicReindexInterval = serveCmd.Flags().Duration("reindex-interval", 30*time.Minute, "interval between period reindexing")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -56,20 +51,20 @@ a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 			os.Exit(1)
 		}
 
-		ticker := time.NewTicker(*periodicReindexInterval)
+		ticker := time.NewTicker(viper.GetDuration("VSIX_SERVE_REINDEX_INTERVAL"))
 		defer ticker.Stop()
 
 		done := make(chan bool)
 
 		go func() {
-			slog.Debug("starting periodic reindexer", "interval", periodicReindexInterval)
+			slog.Debug("starting periodic reindexer", "interval", viper.GetDuration("VSIX_SERVE_REINDEX_INTERVAL"))
 			for {
 				select {
 				case <-done:
 					return
 				case <-ticker.C:
 					periodicReindex()
-					slog.Debug("periodic reindexer going to sleep", "duration", periodicReindexInterval)
+					slog.Debug("periodic reindexer going to sleep", "duration", viper.GetDuration("VSIX_SERVE_REINDEX_INTERVAL"))
 				}
 			}
 		}()
