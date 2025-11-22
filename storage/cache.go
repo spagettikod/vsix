@@ -25,35 +25,37 @@ const (
 	CacheFilename           = "vsix.sqlite"
 	sqlCreateExtensionTable = `
 CREATE TABLE IF NOT EXISTS extension (
-	id				INTEGER PRIMARY KEY AUTOINCREMENT,
-	uid				TEXT NOT NULL UNIQUE,
-	extension_id	TEXT NOT NULL
-					GENERATED ALWAYS AS (
-						json_extract(metadata, '$.extensionId')
-					),
-	display_name	TEXT NOT NULL
-					GENERATED ALWAYS AS (
-						json_extract(metadata, '$.displayName')
-					),
-	published_date	DATETIME NOT NULL
-					GENERATED ALWAYS AS (
-						json_extract(metadata, '$.publishedDate')
-					),
-	weighted_rating	NUMERIC NOT NULL,
-	install			INTEGER NOT NULL,
-	metadata		TEXT NOT NULL,
-	updated_at		DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-	created_at		DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP)
-)`
+	id						INTEGER PRIMARY KEY AUTOINCREMENT,
+	uid						TEXT NOT NULL UNIQUE,
+	extension_id			TEXT NOT NULL
+							GENERATED ALWAYS AS (
+								json_extract(metadata, '$.extensionId')
+							),
+	display_name			TEXT NOT NULL
+							GENERATED ALWAYS AS (
+								json_extract(metadata, '$.displayName')
+							),
+	published_date			REAL NOT NULL
+							GENERATED ALWAYS AS (
+								datetime(json_extract(metadata, '$.publishedDate'), 'auto')
+							),
+	weighted_rating			REAL NOT NULL,
+	install					INTEGER NOT NULL,
+	metadata				TEXT NOT NULL,
+	metadata_latest_version	TEXT NOT NULL,
+	metadata_all_versions	TEXT NOT NULL,
+	updated_at				TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+	created_at				TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+) STRICT`
 	sqlCreateExtensionFTSTable = `
 CREATE VIRTUAL TABLE IF NOT EXISTS extension_fts USING fts5 (
 	id,
 	query
-)
-`
+)`
 	sqlCreateVersionTable = `
 CREATE TABLE IF NOT EXISTS version (
 	id				INTEGER PRIMARY KEY AUTOINCREMENT,
+	extension_id	INTEGER NOT NULL,
 	uid				TEXT NOT NULL,
 	version			TEXT NOT NULL
 					GENERATED ALWAYS AS (
@@ -67,16 +69,16 @@ CREATE TABLE IF NOT EXISTS version (
 					GENERATED ALWAYS AS (
 						uid || '@' ||  version || ':' || platform
 					),
-	last_updated 	DATETIME NOT NULL
+	last_updated 	REAL NOT NULL
 				 	GENERATED ALWAYS AS (
 				 		json_extract(metadata, '$.lastUpdated')
 					),
 	pre_release		TEXT NOT NULL,
 	metadata		TEXT NOT NULL,
-	updated_at		DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-	created_at		DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
-	FOREIGN KEY (uid) REFERENCES extension(id)
-)`
+	updated_at		TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+	created_at		TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+	FOREIGN KEY (extension_id) REFERENCES extension(id)
+) STRICT`
 )
 
 type Cache struct {
@@ -131,15 +133,15 @@ func (c Cache) Reset() error {
 
 // putExtension adds (or updates) the extension metadata into the cache. It
 // also updates the full text search index accordingly.
-func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata []byte) error {
+func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata, fullMetadata, latestMetadata []byte) (int, error) {
 	metaUID := ""
 	if err := tx.QueryRow(`SELECT LOWER(json_extract(:metadata, '$.publisher.publisherName')) || '.' ||
 						LOWER(json_extract(:metadata, '$.extensionName'))`, sql.Named("metadata", metadata)).Scan(&metaUID); err != nil {
-		return err
+		return 0, err
 	}
 
 	if metaUID != uid.String() {
-		return fmt.Errorf("unique identifier does not match the id fo the metadata, uid: %v metadata-uid: %v", uid.String(), metaUID)
+		return 0, fmt.Errorf("unique identifier does not match the id fo the metadata, uid: %v metadata-uid: %v", uid.String(), metaUID)
 	}
 
 	var weigthedRating float32
@@ -149,7 +151,7 @@ func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata []byte) er
 							WHERE 	json_extract(value, '$.statisticName') = 'weightedRating'
 							LIMIT 1
 						   )`, sql.Named("json", string(metadata))).Scan(&weigthedRating); err != nil {
-		return err
+		return 0, err
 	}
 	var install float32
 	if err := tx.QueryRow(`SELECT (
@@ -158,18 +160,18 @@ func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata []byte) er
 							WHERE 	json_extract(value, '$.statisticName') = 'install'
 							LIMIT 1
 						   )`, sql.Named("json", string(metadata))).Scan(&install); err != nil {
-		return err
+		return 0, err
 	}
 
 	var id int64
-	err := tx.QueryRow(`INSERT INTO extension (uid, metadata, weighted_rating, install)
-					   VALUES (?, ?, ?, ?)
-					   ON CONFLICT(uid) DO UPDATE
-					   SET metadata = excluded.metadata,
-						   updated_at = CURRENT_TIMESTAMP
-					   RETURNING id`, uid.String(), metadata, weigthedRating, install).Scan(&id)
+	err := tx.QueryRow(`INSERT INTO extension (uid, metadata, weighted_rating, install, metadata_latest_version, metadata_all_versions)
+					    VALUES (?, ?, ?, ?, ?, ?)
+					    ON CONFLICT(uid) DO UPDATE
+					    SET metadata = excluded.metadata,
+						    updated_at = CURRENT_TIMESTAMP
+					    RETURNING id`, uid.String(), string(metadata), weigthedRating, install, string(latestMetadata), string(fullMetadata)).Scan(&id)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// --
@@ -182,39 +184,29 @@ func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata []byte) er
 								 json_extract(:json, '$.displayName') || ' ' ||
 								 json_extract(:json, '$.publisher.publisherName') || ' ' ||
 								 json_extract(:json, '$.shortDescription')`, sql.Named("json", string(metadata))).Scan(&q); err != nil {
-		return err
+		return 0, err
 	}
 
 	// remove the old search index
 	if _, err := tx.Exec("DELETE FROM extension_fts WHERE id = ?", id); err != nil {
-		return err
+		return 0, err
 	}
 
 	// insert the new full text search index value
 	if _, err := tx.Exec("INSERT INTO extension_fts (id, query) VALUES (?, ?)", id, q); err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return int(id), nil
 }
 
-func (c Cache) putVersion(tx *sql.Tx, uid vscode.UniqueID, metadata []byte) error {
-	preRelease := "false"
-	if err := tx.QueryRow(`SELECT COALESCE (
-							(
-								SELECT json_extract(value, '$.value')
-						   		FROM json_each(json(:json), '$.properties')
-						   		WHERE json_extract(value, '$.key') = 'Microsoft.VisualStudio.Code.PreRelease'
-						   		LIMIT 1
-							), 'false'
-						   )`, sql.Named("json", string(metadata))).Scan(&preRelease); err != nil {
-		return err
-	}
-	_, err := tx.Exec(`INSERT INTO version (uid, metadata, pre_release)
-					   VALUES (?, ?, ?)
+func (c Cache) putVersion(tx *sql.Tx, extensionId int, uid vscode.UniqueID, v vscode.Version) error {
+	_, err := tx.Exec(`INSERT INTO version (extension_id, uid, metadata, pre_release)
+					   VALUES (?, ?, ?, ?)
 					   ON CONFLICT(tag) DO UPDATE
 					   SET metadata = excluded.metadata,
-						   updated_at = CURRENT_TIMESTAMP`, uid.String(), metadata, preRelease)
+					   	   pre_release = excluded.pre_release,
+						   updated_at = CURRENT_TIMESTAMP`, extensionId, uid.String(), string(v.ToJSON()), v.IsPreRelease())
 	return err
 }
 
@@ -283,18 +275,33 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("error loading metadata for %v: %w", uid.String(), err)
 	}
+	ext := vscode.Extension{}
+	if err := json.Unmarshal(extMeta, &ext); err != nil {
+		return 0, fmt.Errorf("error unmarchaling extension metadata for %v: %w", uid.String(), err)
+	}
 	tags, err := bend.ListVersionTags(uid)
 	if err != nil {
 		return 0, fmt.Errorf("error listing version tags for %v: %w", uid.String(), err)
 	}
-	versionMetas := [][]byte{}
+	versions := vscode.Versions{}
 	for _, tag := range tags {
 		b, err := bend.LoadVersionMetadata(tag)
 		if err != nil {
 			return 0, fmt.Errorf("error loading version metadata for %v: %w", tag.String(), err)
 		}
-		versionMetas = append(versionMetas, b)
+		v := vscode.Version{}
+		if err := json.Unmarshal(b, &v); err != nil {
+			return 0, fmt.Errorf("error unmarshaling version metadata for %v: %w", tag.String(), err)
+		}
+		versions = append(versions, v)
 	}
+	versions.Sort()
+	// extension with all versions
+	extFullMeta := ext
+	extFullMeta.Versions = versions
+	// extension with only the latest version
+	extLatestMeta := ext
+	extLatestMeta.Versions = versions.Latest(true)
 
 	c.writeMux.Lock()
 	defer c.writeMux.Unlock()
@@ -302,12 +309,13 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if err := c.putExtension(tx, uid, extMeta); err != nil {
+	id := 0
+	if id, err = c.putExtension(tx, uid, extMeta, extFullMeta.ToJSON(), extLatestMeta.ToJSON()); err != nil {
 		tx.Rollback()
 		return 0, fmt.Errorf("error saving metadata to cache för %v: %w", uid.String(), err)
 	}
-	for _, vmeta := range versionMetas {
-		if err := c.putVersion(tx, uid, vmeta); err != nil {
+	for _, v := range versions {
+		if err := c.putVersion(tx, id, uid, v); err != nil {
 			tx.Rollback()
 			return 0, fmt.Errorf("error saving version metadata to cache for %v: %w", uid.String(), err)
 		}
@@ -367,7 +375,7 @@ func (q Query) ToSQL() string {
 		sql = q.andCondition(sql, fmt.Sprintf("v.platform IN (%s)", strings.Join(q.quoteWrapPlatforms(), ", ")))
 	}
 	if !q.IncludePreRelease {
-		sql = q.andCondition(sql, "v.pre_release = 'false'")
+		sql = q.andCondition(sql, "v.pre_release = false ")
 	}
 	if q.Latest {
 		sql += "GROUP BY v.uid "
@@ -395,7 +403,7 @@ func (c Cache) Query(q Query) ([]QueryResult, error) {
 	} else {
 		sql = "SELECT v.tag, v.pre_release, v.last_updated, e.install "
 	}
-	sql += "FROM extension AS e JOIN version AS v ON v.uid = e.uid "
+	sql += "FROM extension AS e JOIN version AS v ON v.extension_id = e.id "
 	sql += q.ToSQL()
 	slog.Debug("query generated the following sql statement", "sql", sql)
 	rows, err := c.conn.Query(sql)
@@ -419,109 +427,6 @@ func (c Cache) Query(q Query) ([]QueryResult, error) {
 		res = append(res, r)
 	}
 	return res, nil
-}
-
-// List all extensions (and their versions) in the cache.
-func (c Cache) List() ([]vscode.Extension, error) {
-	rows, err := c.conn.Query("SELECT metadata FROM extension")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var metas []string
-	exts := []vscode.Extension{}
-	for rows.Next() {
-		var meta string
-		if err := rows.Scan(&meta); err != nil {
-			return nil, fmt.Errorf("scan failed: %w", err)
-		}
-		metas = append(metas, meta)
-	}
-
-	// Create a buffered channel to limit concurrency to 5
-	semaphore := make(chan struct{}, 20)
-	// Use a mutex to safely update shared counters
-	var mu sync.Mutex
-
-	// Use errgroup to manage parallel execution and error handling
-	var g errgroup.Group
-
-	for _, meta := range metas {
-		semaphore <- struct{}{}
-
-		g.Go(func() error {
-			defer func() {
-				<-semaphore
-			}()
-
-			ext := vscode.Extension{}
-
-			if err := json.Unmarshal([]byte(meta), &ext); err != nil {
-				return fmt.Errorf("unmarshal failed: %w", err)
-			}
-			vers, err := c.listVersions(ext.UniqueID(), true)
-			if err != nil {
-				return fmt.Errorf("error listing version for extension %s: %w", ext.UniqueID(), err)
-			}
-			ext.Versions = vers
-			mu.Lock()
-			exts = append(exts, ext)
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	return exts, nil
-}
-
-// listVersions lists all versions for the extension with the given identifier.
-func (c Cache) listVersions(uid vscode.UniqueID, latestVersionOnly bool) ([]vscode.Version, error) {
-	var rows *sql.Rows
-	var err error
-	if latestVersionOnly {
-		rows, err = c.conn.Query(`WITH MaxLastUpdated AS (
-									SELECT MAX(last_updated) AS max_last_updated
-									FROM version
-									WHERE uid = :uid
-								)
-								SELECT v.metadata
-								FROM version v, MaxLastUpdated m
-								WHERE uid = :uid
-								AND v.version IN (
-									SELECT version 
-									FROM version 
-									WHERE uid = :uid
-									AND last_updated = m.max_last_updated
-								)`, sql.Named("uid", uid.String()))
-	} else {
-		rows, err = c.conn.Query(`SELECT v.metadata
-								  FROM 	version AS v
-								  WHERE v.uid = ?
-								  ORDER BY v.last_updated DESC`, uid.String())
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var meta string
-	vers := []vscode.Version{}
-	for rows.Next() {
-		ver := vscode.Version{}
-		if err := rows.Scan(&meta); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal([]byte(meta), &ver); err != nil {
-			return nil, err
-		}
-		vers = append(vers, ver)
-	}
-	return vers, nil
 }
 
 // ListVersionTags returns all version tags matching the given tag. For example
@@ -570,7 +475,7 @@ func (c Cache) FindByVersionTag(tag vscode.VersionTag) (vscode.Version, error) {
 
 func (c Cache) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, error) {
 	metadata := ""
-	err := c.conn.QueryRow("SELECT metadata FROM extension WHERE uid = ?", uid.String()).Scan(&metadata)
+	err := c.conn.QueryRow("SELECT metadata_all_versions FROM extension WHERE uid = ?", uid.String()).Scan(&metadata)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			slog.Debug("FindByUniqueID: uid not found", "uid", uid.String())
@@ -582,14 +487,7 @@ func (c Cache) FindByUniqueID(uid vscode.UniqueID) (vscode.Extension, error) {
 	if err := json.Unmarshal([]byte(metadata), &ext); err != nil {
 		return vscode.Extension{}, err
 	}
-
-	// list all the versions for this extension
-	vers, err := c.listVersions(uid, true)
-	if err != nil {
-		return vscode.Extension{}, err
-	}
-	ext.Versions = append(ext.Versions, vers...)
-	return ext, nil
+	return ext, json.Unmarshal([]byte(metadata), &ext)
 }
 
 func (c Cache) ListPlatforms(uid vscode.UniqueID) ([]string, error) {
@@ -675,10 +573,15 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 	args := []any{}
 	limit := q.Filters[0].PageSize
 	offset := (q.Filters[0].PageNumber - 1) * limit
+	start := time.Now()
+	if q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly) {
+		sqlStr = "SELECT e.metadata_latest_version "
+	} else {
+		sqlStr = "SELECT e.metadata_all_versions "
+	}
 	if q.IsEmptyQuery() {
 		// empty queries sorted by number of installs equates to a @popular query
-		sqlStr = `SELECT e.metadata
-			   	  FROM extension AS e `
+		sqlStr += "FROM extension AS e "
 		if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension").Scan(&totalCount); err != nil {
 			return res, err
 		}
@@ -687,10 +590,9 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 		searchText := q.CriteriaValues(marketplace.FilterTypeSearchText)
 		extensionIds := q.CriteriaValues(marketplace.FilterTypeExtensionID)
 		if len(searchText) > 0 {
-			sqlStr = `SELECT e.metadata
-					  FROM extension_fts AS fts
-					  JOIN extension AS e ON e.id = fts.id
-					  WHERE fts.query MATCH ? `
+			sqlStr += `FROM extension_fts AS fts
+					   JOIN extension AS e ON e.id = fts.id
+					   WHERE fts.query MATCH ? `
 			args = append(args, searchText[0])
 			if err := c.conn.QueryRow(`SELECT COUNT(1)
     								   FROM extension_fts AS fts
@@ -703,9 +605,8 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 				args = append(args, id)
 			}
 			p := placeholders(len(extensionIds))
-			sqlStr = `SELECT e.metadata
- 					  FROM extension AS e
-					  WHERE e.extension_id IN `
+			sqlStr += `FROM extension AS e
+					   WHERE e.extension_id IN `
 			sqlStr = sqlStr + "(" + p + ") "
 			if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension WHERE extension_id IN ("+p+")", args...).Scan(&totalCount); err != nil {
 				return res, err
@@ -715,9 +616,8 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 				args = append(args, name)
 			}
 			p := placeholders(len(extensionNames))
-			sqlStr = `SELECT metadata
-					  FROM extension
-					  WHERE uid IN `
+			sqlStr += `FROM extension
+					   WHERE uid IN `
 			sqlStr = sqlStr + "(" + p + ") "
 			if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension WHERE uid IN ("+p+")", args...).Scan(&totalCount); err != nil {
 				return res, err
@@ -758,23 +658,12 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 		if err := json.Unmarshal([]byte(meta), &ext); err != nil {
 			return res, err
 		}
-
-		slog.Debug("listing versions", "uid", ext.UniqueID(), "onlyLatest", q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly))
-		// fetch extension versions
-		versions, err := c.listVersions(ext.UniqueID(), q.Flags.Is(marketplace.FlagIncludeLatestVersionOnly))
-		if err != nil {
-			return res, err
-		}
-		slog.Debug("found versions", "uid", ext.UniqueID(), "count", len(versions))
-		ext.Versions = append(ext.Versions, versions...)
-
 		extensions = append(extensions, ext)
 	}
-
 	res.AddExtensions(extensions)
 	// set total count to all extensions found, before some might be removed if paginated
 	res.SetTotalCount(totalCount)
-
+	slog.Debug("query done", "elapsedTime", time.Since(start).Truncate(time.Millisecond))
 	return res, nil
 }
 

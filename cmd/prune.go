@@ -3,15 +3,11 @@ package cmd
 import (
 	"bufio"
 	"fmt"
-	"log/slog"
 	"os"
-	"slices"
 	"strings"
-	"time"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spagettikod/vsix/storage"
-	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
 )
 
@@ -48,71 +44,72 @@ Adding the --keep-versions X flag will keep the X latest versions and remove the
 `,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		start := time.Now()
-		argGrp := slog.Group("args", "cmd", "prune", "preRelease", preRelease, "targetPlatforms", targetPlatforms)
+		os.Exit(0)
+		// start := time.Now()
+		// argGrp := slog.Group("args", "cmd", "prune", "preRelease", preRelease, "targetPlatforms", targetPlatforms)
 
-		// db, results, err := storage.Open(dbPath)
-		// if err != nil {
-		// 	slog.Error("failed open database, exiting", "error", err, argGrp)
-		// 	os.Exit(1)
+		// // db, results, err := storage.Open(dbPath)
+		// // if err != nil {
+		// // 	slog.Error("failed open database, exiting", "error", err, argGrp)
+		// // 	os.Exit(1)
+		// // }
+
+		// results := []storage.ValidationError{}
+		// if keep > 0 {
+		// 	exts, err := cache.List()
+		// 	if err != nil {
+		// 		slog.Error("error reading cache, exiting", "error", err, argGrp)
+		// 		os.Exit(1)
+		// 	}
+		// 	for _, ext := range exts {
+		// 		// reduce to keep only the version numbers, we'll prune versions regardless of platform
+		// 		reducedVersions := slices.CompactFunc(ext.Versions, func(v1, v2 vscode.Version) bool {
+		// 			return v1.Version == v2.Version
+		// 		})
+		// 		if len(reducedVersions) > keep { // are there more versions than we want to keep?
+		// 			for _, v := range reducedVersions[keep:] { // loop through all versions we don't want to keep
+		// 				res := storage.ValidationError{
+		// 					Tag:   vscode.VersionTag{UniqueID: ext.UniqueID(), Version: v.Version},
+		// 					Error: fmt.Errorf("version pruning, keep %v latest versions", keep),
+		// 				}
+		// 				results = append(results, res)
+		// 			}
+		// 		}
+		// 	}
 		// }
 
-		results := []storage.ValidationError{}
-		if keep > 0 {
-			exts, err := cache.List()
-			if err != nil {
-				slog.Error("error reading cache, exiting", "error", err, argGrp)
-				os.Exit(1)
-			}
-			for _, ext := range exts {
-				// reduce to keep only the version numbers, we'll prune versions regardless of platform
-				reducedVersions := slices.CompactFunc(ext.Versions, func(v1, v2 vscode.Version) bool {
-					return v1.Version == v2.Version
-				})
-				if len(reducedVersions) > keep { // are there more versions than we want to keep?
-					for _, v := range reducedVersions[keep:] { // loop through all versions we don't want to keep
-						res := storage.ValidationError{
-							Tag:   vscode.VersionTag{UniqueID: ext.UniqueID(), Version: v.Version},
-							Error: fmt.Errorf("version pruning, keep %v latest versions", keep),
-						}
-						results = append(results, res)
-					}
-				}
-			}
-		}
+		// if !removeEmpty { // flag --remove-empty was not set, we won't remove items that has no versions
+		// 	results = slices.DeleteFunc(results, func(ve storage.ValidationError) bool {
+		// 		return ve.Error == storage.ErrNoVersions
+		// 	})
+		// }
 
-		if !removeEmpty { // flag --remove-empty was not set, we won't remove items that has no versions
-			results = slices.DeleteFunc(results, func(ve storage.ValidationError) bool {
-				return ve.Error == storage.ErrNoVersions
-			})
-		}
+		// if dry {
+		// 	printValidationErrorsTable(results)
+		// 	os.Exit(0)
+		// } else {
+		// 	if !force { // print items that will be removed before confirmation
+		// 		printValidationErrorsTable(results)
+		// 		if len(results) == 0 { // exit if we printed nothing
+		// 			os.Exit(0)
+		// 		}
+		// 		fmt.Println("-----")
+		// 	}
+		// 	if force || confirm(len(results)) {
+		// 		for _, result := range results {
+		// 			if force { // force prints removed tags
+		// 				fmt.Println(result.Tag)
+		// 			}
+		// 			// TODO implement if to be used
+		// 			// if err := db.Remove(result.Tag); err != nil {
+		// 			// 	slog.Error("remove failed, exiting", "error", err, argGrp)
+		// 			// 	os.Exit(1)
+		// 			// }
+		// 		}
+		// 	}
+		// }
 
-		if dry {
-			printValidationErrorsTable(results)
-			os.Exit(0)
-		} else {
-			if !force { // print items that will be removed before confirmation
-				printValidationErrorsTable(results)
-				if len(results) == 0 { // exit if we printed nothing
-					os.Exit(0)
-				}
-				fmt.Println("-----")
-			}
-			if force || confirm(len(results)) {
-				for _, result := range results {
-					if force { // force prints removed tags
-						fmt.Println(result.Tag)
-					}
-					// TODO implement if to be used
-					// if err := db.Remove(result.Tag); err != nil {
-					// 	slog.Error("remove failed, exiting", "error", err, argGrp)
-					// 	os.Exit(1)
-					// }
-				}
-			}
-		}
-
-		slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), argGrp)
+		// slog.Info("done", "elapsedTime", time.Since(start).Round(time.Millisecond), argGrp)
 	},
 }
 
