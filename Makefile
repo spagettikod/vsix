@@ -1,4 +1,4 @@
-VERSION=5.0.0-beta
+VERSION=5.0.0
 OUTPUT=_pkg
 PWD=$(shell pwd)
 DATE=$(shell date -u -Iseconds)
