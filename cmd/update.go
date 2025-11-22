@@ -48,7 +48,7 @@ pre-release-flag.`,
 		argGrp := slog.Group("args", "cmd", "update", "preRelease", preRelease)
 
 		extensionsToUpdate := []marketplace.ExtensionRequest{}
-		p := cli.NewProgress(0, "Listing extensions", !(verbose || debug || quiet))
+		p := cli.NewProgress(0, "Preparing update", !(verbose || debug || quiet))
 		go p.DoWork()
 		if len(args) > 0 {
 			for _, uid := range argsToUniqueIDOrExit(args) {
