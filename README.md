@@ -28,6 +28,7 @@ docker run --rm -it \
 >         spagettikod/vsix:5.0.0 "$@"
 > }
 >```
+> You can then run `$ vsix` at the prompt as it was installed as a regular application.
 
 ## Getting Started
 Start by looking for some extensions you might be interested in. The query is the same as the search box in Visual Studio Code.
