@@ -2,28 +2,7 @@
 Host your private [Marketplace](https://marketplace.visualstudio.com/) by downloading and serving extensions to Visual Studio Code in your own environment.
 
 ## Installation
-vsix is distributed as a single binary file and a container image. The current release support the operating systems and architectures below.
-
-<details>
-<summary>macOS (Apple Silicon)</summary>
-
-```shell
-curl -OL https://github.com/spagettikod/vsix/releases/download/4.0.0/vsix4.0.0.macos-arm64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix4.0.0.macos-arm64.tar.gz
-```
-</details>
-
-<details>
-<summary>Linux</summary>
-
-```shell
-curl -OL https://github.com/spagettikod/vsix/releases/download/4.0.0/vsix4.0.0.linux-amd64.tar.gz
-sudo tar -C /usr/local/bin -xvf vsix4.0.0.linux-amd64.tar.gz
-```
-</details>
-
-<details>
-<summary>Docker</summary>
+vsix is distributed as a container image.
 
 ```docker
 docker run --rm -it spagettikod/vsix info golang.Go
@@ -36,7 +15,18 @@ docker run --rm -it \
       -v $(pwd):/data \
       spagettikod/vsix update
 ```
-</details>
+
+> [!TIP]
+> Create a `.dockerfunc` shell script and run it when you open a terminal to mimic a local installation of vsix.
+> ```bash
+#!/bin/bash
+vsix() {
+    docker run --rm -it \
+        -v <your volume>:/data \
+        -v <you cache location>:/cache \
+        spagettikod/vsix:5.0.0 "$@"
+}
+>```
 
 ## Getting Started
 Start by looking for some extensions you might be interested in. The query is the same as the search box in Visual Studio Code.

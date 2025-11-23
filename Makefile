@@ -2,7 +2,7 @@ VERSION=5.0.0
 OUTPUT=_pkg
 PWD=$(shell pwd)
 DATE=$(shell date -u -Iseconds)
-.PHONY: build_linux build_macos pkg_linux pkg_macos all default clean setup docker test
+.PHONY: all default docker docker-dev test
 
 default: help
 
@@ -10,11 +10,13 @@ help:
 	@echo "Build targets for vsix $(VERSION)"
 	@grep -E -h '\s##\s' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
-clean:					## Clean build artifacts
-	@rm -rf $(OUTPUT)
+# clean:					Clean build artifacts
+# 	@rm -rf $(OUTPUT)
 
-build: setup			## Build vsix for arm64 and amd64 through Docker
-	@docker buildx build --output type=local,dest=$(OUTPUT) --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DATE=$(DATE) .
+# build: setup			Build vsix for arm64 and amd64 through Docker
+# 	@env GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build -tags fts5 -ldflags="-X main.version=$(VERSION) -X main.buildDate=$(DATE)" -o $(OUTPUT_LINUX) .
+# 	@env GOOS=darwin GOARCH=arm64 CGO_ENABLED=1 go build -tags fts5 -ldflags="-X main.version=$(VERSION) -X main.buildDate=$(DATE)" -o $(OUTPUT_MACOS)/vsix .
+# 	@docker buildx build --output type=local,dest=$(OUTPUT) --platform=linux/amd64,darwin/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DATE=$(DATE) .
 
 docker:					## Build Docker container for arm64 and amd64
 	@docker buildx build --output type=image --platform=linux/amd64,linux/arm64 -t spagettikod/vsix:$(VERSION) --build-arg VERSION=$(VERSION) --build-arg DATE=$(DATE) .
@@ -30,12 +32,12 @@ down:					## Shut down services used for development
 install: 				## Install vsix locally
 	@CGO_ENABLED=1 go install -tags fts5 -ldflags "-X main.version=$(VERSION) -X main.buildDate=$(DATE)" vsix.go
 
-package: build			## Build and package Linux (amd64) and MacOS executables
-	@tar -C $(OUTPUT_LINUX) -czf $(OUTPUT)/vsix$(VERSION).linux-amd64.tar.gz vsix
-	@tar -C $(OUTPUT_MACOS) -czf $(OUTPUT)/vsix$(VERSION).macos-arm64.tar.gz vsix	
+# package: build			Build and package Linux (amd64) and MacOS executables
+# 	@tar -C _pkg/linux_amd64 -czf $(OUTPUT)/vsix$(VERSION).linux-amd64.tar.gz vsix
+# 	@tar -C _pkg/linux_arm64 -czf $(OUTPUT)/vsix$(VERSION).macos-arm64.tar.gz vsix	
 
-setup:					## Setup and prepare for build
-	@mkdir -p $(OUTPUT)
+# setup: clean			 Setup and prepare for build
+# 	@mkdir -p $(OUTPUT)
 
 test:					## Run tests
 	@docker build --target test . && docker rmi `docker image ls --filter label=vsix_intermediate=true -q`

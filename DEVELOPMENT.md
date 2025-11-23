@@ -1,5 +1,12 @@
 # Development stuff
 
+## Build Darwin executable with Docker
+1. See https://github.com/tonistiigi/xx?tab=readme-ov-file#external-sdk-support for information about building Darwin images.
+2. Fetch the script mentioned into `gen_sdk_package.sh`
+```bash
+./gen_sdk_package.sh
+```
+
 ## Snippets
 List all extensions from an extension query result:
 ```bash
