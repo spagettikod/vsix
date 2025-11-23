@@ -80,6 +80,9 @@ func (er ExtensionRequest) Matches(tag vscode.VersionTag) bool {
 	if tag.PreRelease && !er.PreRelease {
 		return false
 	}
-	return len(er.TargetPlatforms) == 0 || // no target platform given, matches all platforms
-		slices.Contains(er.TargetPlatforms, tag.TargetPlatform) // is the specific platform given in the command, universal will not be matched as it is not included in the version json (see next condition)
+	// no target platform given, matches all platforms
+	if len(er.TargetPlatforms) == 0 {
+		return true
+	}
+	return slices.Contains(er.TargetPlatforms, tag.TargetPlatform) // is the specific platform given in the command, universal will not be matched as it is not included in the version json (see next condition)
 }

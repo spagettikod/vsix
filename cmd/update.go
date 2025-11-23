@@ -1,18 +1,20 @@
 package cmd
 
 import (
+	"errors"
 	"log/slog"
 	"os"
 	"time"
 
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spagettikod/vsix/marketplace"
 	"github.com/spagettikod/vsix/storage"
 	"github.com/spf13/cobra"
 )
 
 func init() {
-	updateCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
 	updateCmd.Flags().BoolVar(&preRelease, "pre-release", false, "update should fetch pre-release versions")
+	updateCmd.Flags().BoolVarP(&quiet, "quiet", "q", false, "don't produce any output except errors")
 	rootCmd.AddCommand(updateCmd)
 }
 
@@ -39,25 +41,24 @@ is marked as pre-release the command will traverse the list of versions until it
 finds the latest version not marked as pre-release. To enable downloading an extension
 and selecting the latest version, regardless if marked as pre-release, use the
 pre-release-flag.`,
-	Example:               `  $ vsix update --data extensions `,
+	Example:               `  $ vsix update`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		start := time.Now()
-		argGrp := slog.Group("args", "cmd", "update", "path", dbPath, "preRelease", preRelease)
-
-		db, verrs, err := storage.Open(dbPath)
-		if err != nil {
-			slog.Error("could not open database, exiting", "error", err, argGrp)
-			os.Exit(1)
-		}
-		printValidationErrors(verrs)
+		argGrp := slog.Group("args", "cmd", "update", "preRelease", preRelease)
 
 		extensionsToUpdate := []marketplace.ExtensionRequest{}
+		p := cli.NewProgress(0, "Preparing update", !(verbose || debug || quiet))
+		go p.DoWork()
 		if len(args) > 0 {
 			for _, uid := range argsToUniqueIDOrExit(args) {
-				ext, found := db.FindByUniqueID(uid)
-				if !found {
-					slog.Error("could not find extension with given unique id, add it before updating", argGrp)
+				ext, err := cache.FindByUniqueID(uid)
+				if err != nil {
+					if errors.Is(err, storage.ErrCacheNotFound) {
+						slog.Error("could not find extension with given unique id, add it before updating", argGrp)
+					} else {
+						slog.Error("error occured while looking up extension in cache", "error", err, argGrp)
+					}
 					os.Exit(1)
 				}
 				er := marketplace.ExtensionRequest{
@@ -68,10 +69,23 @@ pre-release-flag.`,
 				extensionsToUpdate = append(extensionsToUpdate, er)
 			}
 		} else {
-			for _, ext := range db.List() {
+			q := storage.NewQuery()
+			q.IncludePreRelease = true
+			qr, err := cache.Query(q)
+			if err != nil {
+				slog.Error("error listing extensions from cache", "error", err, argGrp)
+				os.Exit(1)
+			}
+			slog.Debug("extensions found", "count", len(qr), argGrp)
+			for _, r := range qr {
+				platforms, err := cache.ListPlatforms(r.Tag.UniqueID)
+				if err != nil {
+					slog.Error("error listing platforms from cache", "error", err, "uniqueID", r.Tag.UniqueID.String(), argGrp)
+					os.Exit(1)
+				}
 				er := marketplace.ExtensionRequest{
-					UniqueID:        ext.UniqueID(),
-					TargetPlatforms: ext.Platforms(),
+					UniqueID:        r.Tag.UniqueID,
+					TargetPlatforms: platforms,
 					PreRelease:      preRelease,
 				}
 				extensionsToUpdate = append(extensionsToUpdate, er)
@@ -82,7 +96,10 @@ pre-release-flag.`,
 			slog.Error("no extensions to update")
 			os.Exit(1)
 		}
-
-		CommonFetchAndSave(db, extensionsToUpdate, start, argGrp)
+		p.StopWork()
+		p.Max(len(extensionsToUpdate))
+		p.Text("Updating")
+		CommonFetchAndSave(extensionsToUpdate, start, p, argGrp)
+		p.Done()
 	},
 }

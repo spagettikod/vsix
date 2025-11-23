@@ -4,3 +4,4 @@ _pkg/
 .DS_Store
 _local/
 _scripts/
+tmp

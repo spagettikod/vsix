@@ -27,7 +27,7 @@ type Extension struct {
 	PublishedDate    time.Time   `json:"publishedDate"`
 	ReleaseDate      time.Time   `json:"releaseDate"`
 	ShortDescription string      `json:"shortDescription"`
-	Versions         []Version   `json:"versions,omitempty"`
+	Versions         Versions    `json:"versions,omitempty"`
 	Categories       []string    `json:"categories"`
 	Tags             []string    `json:"tags"`
 	Statistics       []Statistic `json:"statistics"`
@@ -123,6 +123,14 @@ func (e Extension) String() string {
 	return string(b)
 }
 
+func (e Extension) ToJSON() []byte {
+	b, err := json.Marshal(e)
+	if err != nil {
+		return []byte("! JSON UNMARSHAL FAILED !")
+	}
+	return b
+}
+
 // LatestVersion returns the latest version number for the extension with the given unique ID.
 func (e Extension) LatestVersion(preRelease bool) string {
 	if len(e.Versions) == 0 {
@@ -139,16 +147,6 @@ func (e Extension) LatestVersion(preRelease bool) string {
 	return ""
 }
 
-func (e Extension) Version(version string) ([]Version, bool) {
-	versions := []Version{}
-	for _, v := range e.Versions {
-		if v.Version == version {
-			versions = append(versions, v)
-		}
-	}
-	return versions, len(versions) > 0
-}
-
 // Platforms returns target platforms for the extension. The returned
 // list will include platforms across all versions eventhough target
 // platform might differ across versions.
@@ -161,15 +159,6 @@ func (e Extension) Platforms() []string {
 
 	slices.Sort(platforms)
 	return slices.Compact(platforms)
-}
-
-func (e Extension) VersionByTag(tag VersionTag) (Version, bool) {
-	for _, v := range e.Versions {
-		if tag == v.Tag(tag.UniqueID) {
-			return v, true
-		}
-	}
-	return Version{}, false
 }
 
 // RewriteAssetURL returns a copy of the extension but where the assets are directed to the local VSIX serve external URL.
@@ -190,38 +179,4 @@ func (e Extension) RewriteAssetURL(externalURL string) Extension {
 		cp.Versions = append(cp.Versions, cpVersion)
 	}
 	return cp
-}
-
-// MatchesQuery test if the extension matches any of the text terms in the input.
-func (e Extension) MatchesQuery(terms ...string) bool {
-	for _, term := range terms {
-		term := strings.ToLower(term)
-		if strings.Contains(e.Name, term) ||
-			strings.Contains(e.DisplayName, term) ||
-			strings.Contains(e.Publisher.Name, term) ||
-			strings.Contains(e.ShortDescription, term) {
-			return true
-		}
-	}
-	return false
-}
-
-// MatchesTargetPlatforms returns true if one of the given target platforms matches a platform in any of the versions.
-func (e Extension) MatchesTargetPlatforms(targetPlatforms ...string) bool {
-	for _, tp := range targetPlatforms {
-		if slices.Contains(e.Platforms(), tp) {
-			return true
-		}
-	}
-	return false
-}
-
-// HasPreRelease returns true if any of the versions are pre-release.
-func (e Extension) HasPreRelease() bool {
-	for _, v := range e.Versions {
-		if v.IsPreRelease() {
-			return true
-		}
-	}
-	return false
 }

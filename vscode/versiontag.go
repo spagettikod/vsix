@@ -76,6 +76,14 @@ func (vt VersionTag) Validate() bool {
 	return false
 }
 
+func (vt VersionTag) HasVersion() bool {
+	return vt.Version != ""
+}
+
+func (vt VersionTag) HasTargetPlatform() bool {
+	return vt.HasVersion() && vt.TargetPlatform != ""
+}
+
 func (vt VersionTag) String() string {
 	str := vt.UniqueID.String()
 	if vt.Version != "" {

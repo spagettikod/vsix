@@ -12,15 +12,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/spagettikod/vsix/cli"
 	"github.com/spagettikod/vsix/marketplace"
-	"github.com/spagettikod/vsix/storage"
 	"github.com/spagettikod/vsix/vscode"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
-	serveCmd.Flags().StringVarP(&dbPath, "data", "d", ".", "path where downloaded extensions are stored [VSIX_DB_PATH]")
-	serveCmd.Flags().StringVar(&serveAddr, "addr", "0.0.0.0:8080", "address where the server listens for connections")
 	rootCmd.AddCommand(serveCmd)
 }
 
@@ -40,50 +39,50 @@ URL's starting with 'https://my.server.com/vsix'.
 Serve only listens on http but Visual Studio Code requires https-endpoints. Use
 a proxy like, Traefik or nginx, to terminate TLS when serving extensions.
 `,
-	Example:               `  $ vsix serve --data extensions https://www.example.com/vsix`,
+	Example:               `  $ vsix serve https://www.example.com/vsix`,
 	DisableFlagsInUseLine: true,
 	Run: func(cmd *cobra.Command, args []string) {
-		argGrp := slog.Group("args", "cmd", "serve", "path", dbPath, "addr", serveAddr, "external_url", EnvOrArg("VSIX_EXTERNAL_URL", args, 0))
+		argGrp := slog.Group("args", "cmd", "serve")
 
 		// get the path for the external URL to build the actual path
-		extURL, err := url.Parse(EnvOrArg("VSIX_EXTERNAL_URL", args, 0))
+		extURL, err := url.Parse(viper.GetString("VSIX_SERVE_URL"))
 		if err != nil {
 			slog.Error("could not parse external url, exiting", "error", err, argGrp)
 			os.Exit(1)
 		}
 
-		db, verrs, err := storage.Open(dbPath)
-		if err != nil {
-			slog.Error("could not open database, exiting", "error", err, argGrp)
-			os.Exit(1)
-		}
-		printValidationErrors(verrs)
+		ticker := time.NewTicker(viper.GetDuration("VSIX_SERVE_REINDEX_INTERVAL"))
+		defer ticker.Stop()
+
+		done := make(chan bool)
+
+		go func() {
+			slog.Debug("starting periodic reindexer", "interval", viper.GetDuration("VSIX_SERVE_REINDEX_INTERVAL"))
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					periodicReindex()
+					slog.Debug("periodic reindexer going to sleep", "duration", viper.GetDuration("VSIX_SERVE_REINDEX_INTERVAL"))
+				}
+			}
+		}()
 
 		http.HandleFunc(fmt.Sprintf("OPTIONS /asset/%s", vscode.AssetURLPattern), assetOptionsHandler(argGrp))
-		http.HandleFunc(fmt.Sprintf("GET /asset/%s", vscode.AssetURLPattern), assetGetHandler(db, argGrp))
-		http.HandleFunc("OPTIONS /_gallery/{publisher}/{name}/latest", latestOptionsHandler(argGrp))
-		http.HandleFunc("GET /_gallery/{publisher}/{name}/latest", latestGetHandler(db, extURL.String()+"/asset", argGrp))
+		http.HandleFunc(fmt.Sprintf("GET /asset/%s", vscode.AssetURLPattern), assetGetHandler(argGrp))
+		http.HandleFunc("OPTIONS /_apis/public/gallery/vscode/{publisher}/{name}/latest", latestOptionsHandler(argGrp))
+		http.HandleFunc("GET /_apis/public/gallery/vscode/{publisher}/{name}/latest", latestGetHandler(extURL.String()+"/asset", argGrp))
 		http.HandleFunc("OPTIONS /_apis/public/gallery/extensionquery", queryOptionsHandler(argGrp))
-		http.HandleFunc("POST /_apis/public/gallery/extensionquery", queryPostHandler(db, extURL.String()+"/asset", argGrp))
+		http.HandleFunc("POST /_apis/public/gallery/extensionquery", queryPostHandler(extURL.String()+"/asset", argGrp))
 
-		slog.Info("starting VSIX Server", argGrp)
-		if err := http.ListenAndServe(serveAddr, nil); err != nil {
+		slog.Info("starting VSIX Server", "addr", viper.GetString("VSIX_SERVE_ADDR"), "vsixServeUrl", viper.GetString("VSIX_SERVE_URL"), argGrp)
+		if err := http.ListenAndServe(viper.GetString("VSIX_SERVE_ADDR"), nil); err != nil {
 			slog.Error("error while serving, exiting", "error", err, argGrp)
+			done <- true
 			os.Exit(1)
 		}
 	},
-}
-
-func EnvOrArg(env string, args []string, idx int) string {
-	if val, found := os.LookupEnv(env); found {
-		return val
-	}
-	if idx < len(args) {
-		return args[idx]
-	}
-	fmt.Printf("%s: parameter or flag missing\n", env)
-	os.Exit(1)
-	return ""
 }
 
 func assetOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
@@ -104,7 +103,7 @@ func assetOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
 	})
 }
 
-func assetGetHandler(db *storage.Database, argGrp slog.Attr) http.HandlerFunc {
+func assetGetHandler(argGrp slog.Attr) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -118,7 +117,7 @@ func assetGetHandler(db *storage.Database, argGrp slog.Attr) http.HandlerFunc {
 		}
 
 		// load the asset from database
-		f, err := db.LoadAsset(tag, assetType)
+		f, err := backend.LoadAsset(tag, assetType)
 		if err != nil {
 			if os.IsNotExist(err) {
 				http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
@@ -132,7 +131,7 @@ func assetGetHandler(db *storage.Database, argGrp slog.Attr) http.HandlerFunc {
 		defer f.Close()
 
 		// determine content type and set headers
-		contentType, err := db.DetectAssetContentType(tag, assetType)
+		contentType, err := backend.DetectAssetContentType(tag, assetType)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			slog.Error("error detecting asset content type", "error", err, requestGroup(r), argGrp)
@@ -171,12 +170,11 @@ func latestOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
 	})
 }
 
-func latestGetHandler(db *storage.Database, assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc {
+func latestGetHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Content-Security-Policy", "connect-src 'self' http://localhost:8080;")
 
 		// extract unique identifier from URL pattern
 		uid, ok := vscode.Parse(fmt.Sprintf("%s.%s", r.PathValue("publisher"), r.PathValue("name")))
@@ -186,8 +184,8 @@ func latestGetHandler(db *storage.Database, assetURLPrefix string, argGrp slog.A
 			return
 		}
 
-		ext, found := db.FindByUniqueID(uid)
-		if !found {
+		ext, err := cache.FindByUniqueID(uid)
+		if err != nil {
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			slog.Info("extension not found", requestGroup(r), argGrp)
 			return
@@ -224,7 +222,7 @@ func queryOptionsHandler(argGrp slog.Attr) http.HandlerFunc {
 	})
 }
 
-func queryPostHandler(db *storage.Database, assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc {
+func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -237,6 +235,7 @@ func queryPostHandler(db *storage.Database, assetURLPrefix string, argGrp slog.A
 		}
 		defer r.Body.Close()
 
+		slog.Debug("query parsed", "query", string(bites), argGrp)
 		query := marketplace.Query{}
 		err = json.Unmarshal(bites, &query)
 		if err != nil {
@@ -245,17 +244,19 @@ func queryPostHandler(db *storage.Database, assetURLPrefix string, argGrp slog.A
 			return
 		}
 
-		results, err := db.Run(query)
+		qStart := time.Now()
+		results, err := cache.Run(query)
 		if err != nil {
 			if err == marketplace.ErrInvalidQuery {
-				slog.Error("query contained in the request is not valid", "error", err)
+				slog.Error("query contained in the request is not valid", "error", err, "query", string(bites), requestGroup(r), argGrp)
 				http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			} else {
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
-				slog.Error("error running query", "error", err, requestGroup(r), argGrp)
+				slog.Error("error running query", "error", err, "query", string(bites), requestGroup(r), argGrp)
 			}
 			return
 		}
+		slog.Debug("query finished", "elapsedTime", time.Since(qStart).Round(time.Millisecond), argGrp)
 		results.RewriteAssetURL(assetURLPrefix)
 
 		bites, err = json.Marshal(results)
@@ -277,4 +278,11 @@ func queryPostHandler(db *storage.Database, assetURLPrefix string, argGrp slog.A
 
 func requestGroup(r *http.Request) slog.Attr {
 	return slog.Group("request", "method", r.Method, "url", r.URL)
+}
+
+func periodicReindex() {
+	start := time.Now()
+	slog.Info("starting periodic reindexing")
+	extensionCount, versionCount, err := cache.ReindexP(backend, cli.NoopProgresser{})
+	slog.Info("finished periodic reindexing", "elapsedTime", time.Since(start).Round(time.Millisecond), "err", err, "extensions", extensionCount, "versions", versionCount)
 }

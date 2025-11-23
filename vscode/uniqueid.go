@@ -1,6 +1,8 @@
 package vscode
 
-import "strings"
+import (
+	"strings"
+)
 
 type UniqueID struct {
 	Publisher string
@@ -27,9 +29,10 @@ func Parse(id string) (UniqueID, bool) {
 	if id == "" {
 		return UniqueID{}, false
 	}
+	id = strings.TrimSpace(id)
 	spl := strings.Split(id, ".")
 	if len(spl) != 2 {
 		return UniqueID{}, false
 	}
-	return UniqueID{Publisher: spl[0], Name: spl[1]}, true
+	return UniqueID{Publisher: strings.ToLower(spl[0]), Name: strings.ToLower(spl[1])}, true
 }
