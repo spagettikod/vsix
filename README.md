@@ -5,27 +5,28 @@ Host your private [Marketplace](https://marketplace.visualstudio.com/) by downlo
 vsix is distributed as a container image.
 
 ```docker
-docker run --rm -it spagettikod/vsix info golang.Go
+docker run --rm -it spagettikod/vsix info
 ```
 
-You can bind mount folders to `/data` in the container when working with downloaded extensions.
+You can bind mount folders to `/data` and `/cache` to save information between restarts.
 
 ```docker
 docker run --rm -it \
-      -v $(pwd):/data \
+      -v $(pwd)/data:/data \
+	  -v $(pwd)/cache:/cache \
       spagettikod/vsix update
 ```
 
 > [!TIP]
 > Create a `.dockerfunc` shell script and run it when you open a terminal to mimic a local installation of vsix.
 > ```bash
-#!/bin/bash
-vsix() {
-    docker run --rm -it \
-        -v <your volume>:/data \
-        -v <you cache location>:/cache \
-        spagettikod/vsix:5.0.0 "$@"
-}
+> #!/bin/bash
+> vsix() {
+>     docker run --rm -it \
+>         -v <your volume>:/data \
+>         -v <you cache location>:/cache \
+>         spagettikod/vsix:5.0.0 "$@"
+> }
 >```
 
 ## Getting Started
