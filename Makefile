@@ -53,4 +53,7 @@ up:						## Start services used for development
 	@echo "Created MinIO alias called vsixminio, run . ./mcfunc.sh to get a bash function for the mc command with correct setup."
 	@echo "Test the setup with: mc admin info vsixminio"
 
+push: docker			## Push to Docker Hub
+	@docker push spagettikod/vsix:$(VERSION)
+
 all: clean test pkg_linux pkg_macos pkg_docker
