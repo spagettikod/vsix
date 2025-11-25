@@ -616,8 +616,8 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 				args = append(args, name)
 			}
 			p := placeholders(len(extensionNames))
-			sqlStr += `FROM extension
-					   WHERE uid IN `
+			sqlStr += `FROM extension AS e
+					   WHERE e.uid IN `
 			sqlStr = sqlStr + "(" + p + ") "
 			if err := c.conn.QueryRow("SELECT COUNT(1) FROM extension WHERE uid IN ("+p+")", args...).Scan(&totalCount); err != nil {
 				return res, err
