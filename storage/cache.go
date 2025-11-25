@@ -182,6 +182,7 @@ func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata, fullMetad
 	var q string
 	if err = tx.QueryRow(`SELECT json_extract(:json, '$.extensionName') || ' ' ||
 								 json_extract(:json, '$.displayName') || ' ' ||
+								 json_extract(:json, '$.publisher.publisherName') || '.' || json_extract(:json, '$.extensionName') || ' ' ||
 								 json_extract(:json, '$.publisher.publisherName') || ' ' ||
 								 json_extract(:json, '$.shortDescription')`, sql.Named("json", string(metadata))).Scan(&q); err != nil {
 		return 0, err
@@ -593,11 +594,11 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 			sqlStr += `FROM extension_fts AS fts
 					   JOIN extension AS e ON e.id = fts.id
 					   WHERE fts.query MATCH ? `
-			args = append(args, searchText[0])
+			args = append(args, ftsArgs(searchText[0]))
 			if err := c.conn.QueryRow(`SELECT COUNT(1)
     								   FROM extension_fts AS fts
 									   JOIN extension AS e ON e.id = fts.id
-									   WHERE fts.query MATCH ? `, searchText[0]).Scan(&totalCount); err != nil {
+									   WHERE fts.query MATCH ? `, ftsArgs(searchText[0])).Scan(&totalCount); err != nil {
 				return res, err
 			}
 		} else if len(extensionIds) > 0 {
@@ -665,6 +666,23 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 	res.SetTotalCount(totalCount)
 	slog.Debug("query done", "elapsedTime", time.Since(start).Truncate(time.Millisecond))
 	return res, nil
+}
+
+func ftsArgs(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	in := strings.Split(s, " ")
+	out := []string{}
+	for _, spl := range in {
+		spl = spl + "*"
+		if strings.Contains(spl, "-") || strings.Contains(spl, ".") {
+			spl = "\"" + spl + "\""
+		}
+		out = append(out, spl)
+	}
+	return strings.Join(out, " ")
 }
 
 func placeholders(count int) string {
