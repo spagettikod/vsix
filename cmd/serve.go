@@ -277,7 +277,7 @@ func queryPostHandler(assetURLPrefix string, argGrp slog.Attr) http.HandlerFunc 
 }
 
 func requestGroup(r *http.Request) slog.Attr {
-	return slog.Group("request", "method", r.Method, "url", r.URL)
+	return slog.Group("request", "method", r.Method, "url", r.URL, "User-agent", r.Header.Get("User-agent"))
 }
 
 func periodicReindex() {

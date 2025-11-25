@@ -638,6 +638,7 @@ func (c Cache) Run(q marketplace.Query) (vscode.Results, error) {
 	case marketplace.ByRating:
 		sqlStr += "ORDER BY e.weighted_rating DESC "
 	case marketplace.ByNone:
+		sqlStr += "ORDER BY e.install DESC "
 	}
 	sqlStr += "LIMIT ? OFFSET ?"
 
