@@ -386,7 +386,7 @@ func (q Query) andCondition(sql, c string) string {
 func (q Query) ToSQL() string {
 	sql := ""
 	if q.Text != "" {
-		sql = q.andCondition(sql, fmt.Sprintf("e.id IN (SELECT id FROM extension_fts WHERE query MATCH '%s')", q.Text))
+		sql = q.andCondition(sql, fmt.Sprintf("e.uid LIKE '%%%s%%'", q.Text))
 	}
 	if len(q.Platforms) > 0 {
 		sql = q.andCondition(sql, fmt.Sprintf("v.platform IN (%s)", strings.Join(q.quoteWrapPlatforms(), ", ")))
