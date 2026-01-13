@@ -168,6 +168,10 @@ func (c Cache) putExtension(tx *sql.Tx, uid vscode.UniqueID, metadata, fullMetad
 					    VALUES (?, ?, ?, ?, ?, ?)
 					    ON CONFLICT(uid) DO UPDATE
 					    SET metadata = excluded.metadata,
+							weighted_rating = excluded.weighted_rating,
+							install = excluded.install,
+							metadata_latest_version = excluded.metadata_latest_version,
+							metadata_all_versions = excluded.metadata_all_versions,
 						    updated_at = CURRENT_TIMESTAMP
 					    RETURNING id`, uid.String(), string(metadata), weigthedRating, install, string(latestMetadata), string(fullMetadata)).Scan(&id)
 	if err != nil {
@@ -303,6 +307,11 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	// extension with only the latest version
 	extLatestMeta := ext
 	extLatestMeta.Versions = versions.Latest(true)
+	if len(extLatestMeta.Versions) > 0 {
+		slog.Debug("latest version is", "version", extLatestMeta.Versions[0].Version, "uid", uid.String())
+	} else {
+		slog.Warn("latest version not found, extension should have a latest version, continuing execution", "uid", uid.String())
+	}
 
 	c.writeMux.Lock()
 	defer c.writeMux.Unlock()
@@ -313,15 +322,22 @@ func (c Cache) IndexExtension(bend Backend, uid vscode.UniqueID) (int, error) {
 	id := 0
 	if id, err = c.putExtension(tx, uid, extMeta, extFullMeta.ToJSON(), extLatestMeta.ToJSON()); err != nil {
 		tx.Rollback()
+		slog.Debug("putExtension failed", "error", err, "uid", uid.String())
 		return 0, fmt.Errorf("error saving metadata to cache för %v: %w", uid.String(), err)
 	}
 	for _, v := range versions {
 		if err := c.putVersion(tx, id, uid, v); err != nil {
 			tx.Rollback()
+			slog.Debug("putVersion failed", "error", err, "uid", uid.String())
 			return 0, fmt.Errorf("error saving version metadata to cache for %v: %w", uid.String(), err)
 		}
 	}
-	return len(tags), tx.Commit()
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		slog.Debug("commit failed", "error", err, "uid", uid.String())
+		return 0, err
+	}
+	return len(tags), nil
 }
 
 type OrderBy string
