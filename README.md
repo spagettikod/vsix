@@ -1,3 +1,5 @@
+### THIS PROJECT HAS BEEN MIGRATED TO https://codeberg.org/spagettikod/vsix
+
 # vsix
 Host your private [Marketplace](https://marketplace.visualstudio.com/) by downloading and serving extensions to Visual Studio Code in your own environment.
 
